@@ -1,49 +1,50 @@
-# 💘 Cupid Call — AI Love Telegram Phone Calls
+# Participant
 
-> Send your Valentine a personalized AI love telegram — straight to their phone.
-> Built for the Sophiie AI Hackathon 2026 (Feb 14-15).
+| Field | Your Answer |
+|---|---|
+| Name | Kasey Robinson |
+| University / Employer | Unemployed |
 
-## What is it?
+# Project
 
-Cupid Call lets you craft a deeply personal love message using your relationship details, pick a character style (Cowboy, Wizard, Southern Belle, 1800s Literature...), choose a voice, and have it delivered as a **live AI phone call**.
+| Field | Your Answer |
+|---|---|
+| Project Name | Cupid Call |
+| One-Line Description | AI-generated Valentine phone calls delivered live with a character voice. |
+| Demo Video Link | _Add your demo link here_ |
+| Tech Stack | Next.js 14, React, TypeScript, Tailwind CSS, NextAuth, Stripe, Twilio, Fastify WebSocket bridge |
+| AI Provider(s) Used | xAI Grok (text + voice/realtime) |
 
-The recipient can even **talk back** — the AI will have a brief warm conversation before saying goodbye.
+# About Your Project
 
-### 🔞 After Dark Mode
-Unlock **Spicy** and **X-Rated** styles for explicitly romantic content. Grok doesn't hold back.
+## What does it do?
 
-## Tech Stack
+Cupid Call lets a user create a personalized Valentine telegram and deliver it as a live AI phone call.  
+The user chooses a content type, adds private relationship details, selects a character persona, previews the generated script, and sends the call.
 
-- **Frontend:** Next.js 14 + React + TypeScript + Tailwind + Framer Motion
-- **Script Gen:** xAI Grok text API (replaces OpenAI)
-- **Voice:** xAI Grok Voice Agent — real-time WebSocket (replaces ElevenLabs)
-- **Phone:** Twilio + WebSocket Media Streams
-- **Payments:** Stripe Checkout ($10 AUD / 3-pack)
-- **Auth:** NextAuth (Google + quick email)
-- **Promo:** Code LOVE = 1 free call
+## How does the interaction work?
 
-One xAI key replaces both OpenAI + ElevenLabs. $0.05/min flat rate.
+The sender signs in, picks an age band, fills in message context, and chooses one of five character personas.  
+The app generates a script with Grok, shows a preview, and when approved it triggers a Twilio outbound call.  
+A realtime bridge streams audio between Twilio and Grok Voice so the recipient can hear the telegram and speak back briefly.
 
-## Setup
+## What makes it special?
+
+It combines high-personalization text generation with live voice interaction in a single flow.  
+Age-gated character options and scripted call framing make the experience feel playful, memorable, and safe by design.
+
+## How to run it
 
 ```bash
-# 1. Frontend
-npm install && cp .env.example .env && npm run dev
-
-# 2. Bridge server (separate terminal)
-cd server && npm install && npm run dev
-
-# 3. Public URL for Twilio
-ngrok http 8081  # Copy URL to BRIDGE_DOMAIN in .env
-
-# 4. Stripe webhooks
-stripe listen --forward-to localhost:3000/api/webhook
+# Example:
+# git clone <your-repo>
+# cd <your-project>
+# npm install
+# cp .env.example .env  # add your API keys
+# npm start
 ```
 
-## Grok Voices
+## Architecture / Technical Notes
 
-Ara (warm female), Rex (confident male), Sal (smooth neutral), Eve (energetic female), Leo (authoritative male)
-
-## Viral Loop
-
-Every call ends with: "Use code LOVE at cupidcall.com for 1 free call back!"
+Frontend/API runs on Next.js. Checkout and webhook handling use Stripe.  
+Phone calls use Twilio. Realtime two-way voice uses a separate WebSocket bridge service (`server/bridge.ts`) that connects Twilio Media Streams to xAI Realtime Voice.

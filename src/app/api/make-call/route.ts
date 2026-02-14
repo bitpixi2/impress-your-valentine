@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/lib/auth'
 import { useCredit, getOrCreateUser } from '@/lib/credits'
+import {
+  getCharacterById,
+  isCharacterAvailableForAge,
+  type AgeBand,
+} from '@/lib/types'
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8081'
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,10 +30,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { phone, senderName, valentineName, script, style, voiceId, isExplicit } = await req.json()
+    const { phone, senderName, valentineName, script, characterId, senderAgeBand } = await req.json()
 
-    if (!phone || !senderName || !script) {
+    if (!phone || !senderName || !script || !characterId || !senderAgeBand) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const validAgeBands: AgeBand[] = ['under_16', '16_plus', '18_plus']
+    if (!validAgeBands.includes(senderAgeBand)) {
+      return NextResponse.json({ error: 'Invalid age band selected' }, { status: 400 })
+    }
+
+    const character = getCharacterById(characterId)
+    if (!character) {
+      return NextResponse.json({ error: 'Invalid character selected' }, { status: 400 })
+    }
+
+    if (!isCharacterAvailableForAge(character.id, senderAgeBand as AgeBand)) {
+      return NextResponse.json({ error: 'Character not available for selected age band' }, { status: 400 })
     }
 
     // Call the bridge server which handles Twilio ↔ Grok Voice Agent
@@ -39,9 +59,9 @@ export async function POST(req: NextRequest) {
         senderName,
         valentineName,
         script,
-        style: style || '1800s-literature',
-        voiceId: voiceId || 'Ara',
-        isExplicit: isExplicit || false,
+        characterId: character.id,
+        senderAgeBand,
+        voiceId: character.voiceId,
         callId: `cupid-${userId}-${Date.now()}`,
       }),
     })

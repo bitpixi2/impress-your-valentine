@@ -1,16 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { motion } from 'framer-motion'
-import { useSearchParams } from 'next/navigation'
 
 export default function SignInPage() {
-  const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/create'
+  const [callbackUrl, setCallbackUrl] = useState('/create')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const nextCallback = params.get('callbackUrl')
+    if (nextCallback) {
+      setCallbackUrl(nextCallback)
+    }
+  }, [])
 
   const handleQuickSignIn = async (e: React.FormEvent) => {
     e.preventDefault()

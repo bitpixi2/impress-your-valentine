@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/lib/auth'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-12-18.acacia',
-})
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +15,15 @@ export async function POST(req: NextRequest) {
 
     const userId = (session.user as any).userId || session.user.email
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const stripeSecret = process.env.STRIPE_SECRET_KEY
+
+    if (!stripeSecret) {
+      return NextResponse.json({ error: 'Stripe is not configured' }, { status: 500 })
+    }
+
+    const stripe = new Stripe(stripeSecret, {
+      apiVersion: '2025-02-24.acacia',
+    })
 
     // Create Stripe Checkout Session for 3-pack ($10 AUD)
     const checkoutSession = await stripe.checkout.sessions.create({

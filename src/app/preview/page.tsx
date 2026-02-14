@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { GROK_VOICES, VOICE_STYLES } from '@/lib/types'
+import { GROK_VOICES, getCharacterById } from '@/lib/types'
 
 export default function PreviewPage() {
   const { data: session } = useSession()
@@ -36,9 +36,9 @@ export default function PreviewPage() {
           senderName: callData.senderName,
           valentineName: callData.valentineName,
           script: callData.script,
-          style: callData.style,
+          characterId: callData.characterId,
+          senderAgeBand: callData.senderAgeBand,
           voiceId: callData.voiceId,
-          isExplicit: callData.isExplicit || false,
         }),
       })
 
@@ -52,11 +52,13 @@ export default function PreviewPage() {
 
       if (!res.ok) throw new Error(data.error || 'Failed to send')
 
-      sessionStorage.setItem('cupidCallResult', JSON.stringify({
+      const sentPayload = {
         ...callData,
         callSid: data.callSid,
         remainingCredits: data.remainingCredits,
-      }))
+      }
+      sessionStorage.setItem('cupidCallResult', JSON.stringify(sentPayload))
+      sessionStorage.setItem('cupidCallSent', JSON.stringify(sentPayload))
       router.push('/sent')
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Try again?')
@@ -73,7 +75,7 @@ export default function PreviewPage() {
   }
 
   const selectedVoice = GROK_VOICES.find(v => v.id === callData.voiceId)
-  const selectedStyle = VOICE_STYLES.find(s => s.id === callData.style)
+  const selectedCharacter = getCharacterById(callData.characterId)
 
   return (
     <main className="min-h-screen px-6 py-8">
@@ -99,14 +101,9 @@ export default function PreviewPage() {
               {selectedVoice.emoji} Voice: {selectedVoice.name}
             </span>
           )}
-          {selectedStyle && (
+          {selectedCharacter && (
             <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-white/60">
-              {selectedStyle.emoji} {selectedStyle.name}
-            </span>
-          )}
-          {callData.isExplicit && (
-            <span className="px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-              🔞 After Dark
+              {selectedCharacter.emoji} {selectedCharacter.name}
             </span>
           )}
         </div>

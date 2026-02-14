@@ -43,9 +43,9 @@ interface CallConfig {
   senderName: string
   valentineName: string
   script: string
-  style: string
+  characterId: string
+  senderAgeBand: string
   voiceId: string  // Ara, Rex, Sal, Eve, Leo
-  isExplicit: boolean
   createdAt: number
 }
 
@@ -59,13 +59,13 @@ fastify.post('/outbound-call', async (request, reply) => {
     senderName,
     valentineName,
     script,
-    style,
+    characterId = 'kid-bot',
+    senderAgeBand = 'under_16',
     voiceId = 'Ara',
-    isExplicit = false,
     callId,
   } = request.body as any
 
-  if (!phone || !senderName || !script) {
+  if (!phone || !senderName || !script || !characterId || !senderAgeBand) {
     return reply.status(400).send({ error: 'Missing required fields' })
   }
 
@@ -80,9 +80,9 @@ fastify.post('/outbound-call', async (request, reply) => {
     senderName,
     valentineName,
     script,
-    style,
+    characterId,
+    senderAgeBand,
     voiceId,
-    isExplicit,
     createdAt: Date.now(),
   })
 
@@ -265,13 +265,20 @@ fastify.register(async (app) => {
 
 // ===== Build the system prompt for Grok =====
 function buildSystemPrompt(config: CallConfig): string {
-  const { senderName, valentineName, script, style, isExplicit } = config
+  const { senderName, valentineName, script, characterId, senderAgeBand } = config
 
-  const explicitNote = isExplicit
-    ? `This is an EXPLICIT/ADULT love telegram. The sender has opted in to spicy, seductive, 
-       sexually suggestive content. Lean into it — be bold, sensual, and unapologetically steamy. 
-       The recipient knows exactly what they signed up for.`
-    : `Keep the content PG-13 and appropriate for all audiences.`
+  const CHARACTER_DELIVERY_PROMPTS: Record<string, string> = {
+    'kid-bot': 'Playful, friendly robot delivery. Cheerful and wholesome.',
+    'victorian-gentleman': 'Elegant and poetic delivery. Warm gentleman tone.',
+    'southern-belle': 'Honey-sweet charm with graceful playful warmth.',
+    'nocturne-vampire': 'Dramatic gothic romance, velvety and intense but respectful.',
+    'sakura-confession': 'Soft, intimate confession energy with tender warmth.',
+  }
+
+  const characterNote = CHARACTER_DELIVERY_PROMPTS[characterId] || 'Warm romantic delivery.'
+  const ageSafety = senderAgeBand === '18_plus'
+    ? 'Audience is 18+, but avoid explicit sexual details. Keep it romantic and consensual.'
+    : 'Audience may include minors. Keep all content PG and wholesome.'
 
   return `You are a Cupid Call love telegram delivery agent. You are calling ${valentineName} 
 on behalf of ${senderName} as part of the Sophiie AI Hackathon Valentine's Day experience.
@@ -289,8 +296,8 @@ ${script}
 5. If they respond, have a brief warm conversation (2-3 exchanges max), then say goodbye.
 6. If they don't respond or say goodbye, end warmly.
 
-STYLE: ${style}
-${explicitNote}
+CHARACTER MODE: ${characterNote}
+SAFETY: ${ageSafety}
 
 IMPORTANT:
 - You ARE the voice delivering this telegram — commit to the character
