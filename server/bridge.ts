@@ -28,6 +28,7 @@ const {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE_NUMBER,
+  PORT,
   BRIDGE_PORT = '8081',
   BRIDGE_DOMAIN,  // Your ngrok/public URL for this bridge server
 } = process.env
@@ -321,7 +322,7 @@ setInterval(() => {
 // ===== Start server =====
 const start = async () => {
   try {
-    const port = parseInt(BRIDGE_PORT)
+    const port = parseInt(PORT || BRIDGE_PORT)
     await fastify.listen({ port, host: '0.0.0.0' })
     fastify.log.info(`🏹 Cupid Call Bridge Server running on port ${port}`)
     fastify.log.info(`💘 Grok Voice Agents: Ara, Rex, Sal, Eve, Leo`)
