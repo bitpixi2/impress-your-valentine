@@ -10,98 +10,49 @@ export default function SentPage() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem('cupidCallSent')
-    if (stored) {
-      const data = JSON.parse(stored)
-      setSenderName(data.senderName)
-      setValentineName(data.valentineName)
-    }
+    if (!stored) return
+    const data = JSON.parse(stored)
+    setSenderName(data.senderName)
+    setValentineName(data.valentineName)
   }, [])
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center px-6">
-      {/* Confetti-like emojis */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 30 }, (_, i) => (
-          <motion.div
-            key={i}
-            className="absolute text-2xl"
-            initial={{
-              x: '50vw',
-              y: '50vh',
-              scale: 0,
-            }}
-            animate={{
-              x: `${Math.random() * 100}vw`,
-              y: `${Math.random() * 100}vh`,
-              scale: [0, 1.5, 1],
-              rotate: Math.random() * 720,
-            }}
-            transition={{
-              duration: 2 + Math.random() * 2,
-              delay: Math.random() * 0.5,
-              ease: 'easeOut',
-            }}
-          >
-            {['💘', '💝', '💖', '🏹', '✨', '🎉', '💌', '❤️‍🔥'][i % 8]}
-          </motion.div>
-        ))}
-      </div>
-
-      <motion.div
-        className="relative z-10 text-center max-w-lg"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
+    <main className="min-h-screen px-6 py-16">
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        className="wizard-shell surface-card text-center"
       >
-        <motion.div
-          className="text-8xl mb-6"
-          animate={{ rotate: [0, -10, 10, -10, 0] }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-        >
-          📞
-        </motion.div>
-
-        <h1 className="font-display text-4xl md:text-5xl font-black mb-4">
-          <span className="text-cupid-pink">Cupid Call Sent!</span>
+        <p className="text-[12px] uppercase tracking-[0.14em] text-gold">Call Status</p>
+        <h1 className="mt-4 font-display text-[54px] italic leading-[1.08] tracking-[0.04em] text-primary">
+          Call in Progress
         </h1>
-
-        <p className="text-white/70 text-xl font-body mb-2">
+        <p className="mx-auto mt-5 max-w-[520px] text-[15px] leading-[1.8] text-muted">
           {valentineName
-            ? <>{valentineName}&apos;s phone is about to ring with a love telegram from {senderName}.</>
-            : <>Your Valentine's phone is about to ring!</>
-          }
+            ? `${valentineName} is being called now with a telegram from ${senderName || 'you'}.`
+            : 'Your recipient is being called now.'}
         </p>
 
-        <p className="text-white/40 font-body mb-8">
-          If they don&apos;t pick up, they&apos;ll get a voicemail. Love finds a way. 💘
-        </p>
-
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 mb-8">
-          <h3 className="font-fun text-cupid-gold mb-3">🌟 What Happens Now?</h3>
-          <div className="text-left space-y-2 text-white/60 font-body text-sm">
-            <p>📱 Their phone will ring in the next few seconds</p>
-            <p>🗣️ The call starts with a friendly intro explaining it&apos;s a Cupid Call</p>
-            <p>💌 Then your personalised love telegram plays</p>
-            <p>🎁 At the end, they&apos;re told to visit CupidCall and use code <strong className="text-cupid-gold">LOVE</strong> for 1 free call back!</p>
-          </div>
+        <div className="mx-auto mt-9 max-w-[560px] rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-5 py-5 text-left">
+          <h2 className="font-display text-[34px] italic leading-[1.1] text-primary">What happens next</h2>
+          <ul className="mt-4 space-y-2 text-[14px] leading-[1.8] text-muted">
+            <li>The phone rings within a few seconds.</li>
+            <li>The recipient hears a Cupid Call introduction.</li>
+            <li>The personalized telegram is delivered live.</li>
+            <li>They can send one back using code LOVE.</li>
+          </ul>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/create" className="btn-cupid px-8 py-4">
-            💘 Send Another Cupid Call
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link href="/create" className="btn-cupid min-w-[184px]">
+            Send another call
           </Link>
-          <Link
-            href="/"
-            className="px-8 py-4 rounded-full border-2 border-white/20 text-white/60 hover:border-white/40 hover:text-white transition-all font-fun text-center"
-          >
-            ← Back to Home
+          <Link href="/" className="btn-secondary min-w-[184px]">
+            Return home
           </Link>
         </div>
-
-        <p className="text-white/20 text-xs mt-8 font-body">
-          Built with 💘 for the Sophiie AI Hackathon 2026
-        </p>
-      </motion.div>
+      </motion.section>
     </main>
   )
 }

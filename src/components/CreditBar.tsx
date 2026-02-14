@@ -35,7 +35,7 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
         onCreditsUpdated()
       }
     } catch {
-      setPromoMessage('Failed to redeem code')
+      setPromoMessage('Could not redeem code.')
       setPromoError(true)
     } finally {
       setIsRedeeming(false)
@@ -47,13 +47,12 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
     try {
       const res = await fetch('/api/checkout', { method: 'POST' })
       const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      } else {
+      if (!data.url) {
         throw new Error('No checkout URL')
       }
+      window.location.href = data.url
     } catch {
-      setPromoMessage('Failed to start checkout. Is Stripe configured?')
+      setPromoMessage('Could not start checkout. Confirm Stripe config first.')
       setPromoError(true)
     } finally {
       setIsBuying(false)
@@ -61,35 +60,23 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
   }
 
   return (
-    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💌</span>
-            <div>
-              <span className="font-fun text-white font-bold text-lg">{credits}</span>
-              <span className="text-white/50 text-sm ml-1">
-                call{credits !== 1 ? 's' : ''} remaining
-              </span>
-            </div>
-          </div>
+    <div className="surface-card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[12px] uppercase tracking-[0.12em] text-muted">Credits</p>
+          <p className="mt-1 text-[15px] text-primary">
+            <span className="font-medium">{credits}</span> call{credits !== 1 ? 's' : ''} available
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           {!hasUsedLoveCode && (
-            <button
-              onClick={() => setShowPromo(!showPromo)}
-              className="px-4 py-2 rounded-full border border-cupid-gold/40 text-cupid-gold text-sm font-fun hover:bg-cupid-gold/10 transition-colors"
-            >
-              🎁 Have a code?
+            <button onClick={() => setShowPromo(!showPromo)} className="btn-secondary">
+              Enter code
             </button>
           )}
-          <button
-            onClick={buyPack}
-            disabled={isBuying}
-            className="btn-cupid px-4 py-2 text-sm"
-          >
-            {isBuying ? '...' : '💰 Buy 3-Pack ($10)'}
+          <button onClick={buyPack} disabled={isBuying} className="btn-cupid">
+            {isBuying ? 'Processing…' : 'Buy 3-call pack ($10)'}
           </button>
         </div>
       </div>
@@ -102,32 +89,28 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="flex gap-2 mt-4">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <input
                 type="text"
-                className="input-cupid flex-1 text-sm uppercase tracking-widest"
-                placeholder="Enter promo code..."
+                className="input-cupid flex-1 uppercase tracking-[0.1em]"
+                placeholder="Promo code"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && redeemPromo()}
               />
-              <button
-                onClick={redeemPromo}
-                disabled={!promoCode || isRedeeming}
-                className={`px-4 py-2 rounded-xl bg-cupid-gold text-cupid-dark font-bold text-sm transition-all ${
-                  !promoCode || isRedeeming ? 'opacity-30' : 'hover:bg-cupid-gold/80'
-                }`}
-              >
-                {isRedeeming ? '...' : 'Redeem'}
+              <button onClick={redeemPromo} disabled={!promoCode || isRedeeming} className="btn-cupid sm:min-w-[120px]">
+                {isRedeeming ? 'Applying…' : 'Apply code'}
               </button>
             </div>
+
             {!hasUsedLoveCode && (
-              <p className="text-white/30 text-xs mt-2">
-                💡 Hint: Try the code LOVE for a free call
+              <p className="mt-3 text-[12px] text-muted">
+                Hint: you can use <span className="text-primary">LOVE</span> once for a free call.
               </p>
             )}
+
             {promoMessage && (
-              <p className={`text-sm mt-2 ${promoError ? 'text-red-400' : 'text-green-400'}`}>
+              <p className={`mt-2 text-[13px] ${promoError ? 'text-[var(--age-red)]' : 'text-[var(--age-green)]'}`}>
                 {promoMessage}
               </p>
             )}

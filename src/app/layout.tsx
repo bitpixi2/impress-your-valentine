@@ -3,10 +3,10 @@ import AuthProvider from '@/components/AuthProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Cupid Call 💘 Send Your Valentine an AI Love Telegram',
+  title: 'Cupid Call | Premium AI Valentine Voice Telegrams',
   description: 'Impress your Valentine with a personalized AI-powered phone call. Pick an age-gated character, add private details, and send a live Grok voice telegram.',
   openGraph: {
-    title: 'Cupid Call 💘 AI Love Telegrams',
+    title: 'Cupid Call | Voice Telegrams',
     description: 'Send your Valentine a personalized AI love telegram — straight to their phone.',
     type: 'website',
   },

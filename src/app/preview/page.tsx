@@ -45,7 +45,7 @@ export default function PreviewPage() {
       const data = await res.json()
 
       if (data.needsCredits) {
-        setError('No credits remaining! Go back and buy a 3-pack or use code LOVE.')
+        setError('No credits remaining. Return to the wizard to add credits.')
         setIsSending(false)
         return
       }
@@ -61,115 +61,90 @@ export default function PreviewPage() {
       sessionStorage.setItem('cupidCallSent', JSON.stringify(sentPayload))
       router.push('/sent')
     } catch (err: any) {
-      setError(err.message || 'Something went wrong. Try again?')
+      setError(err.message || 'Could not place the call.')
       setIsSending(false)
     }
   }
 
   if (!callData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin text-4xl">💘</div>
-      </div>
+      <main className="min-h-screen px-6 py-16">
+        <div className="wizard-shell surface-card text-center">
+          <p className="text-muted">Preparing your preview…</p>
+        </div>
+      </main>
     )
   }
 
-  const selectedVoice = GROK_VOICES.find(v => v.id === callData.voiceId)
+  const selectedVoice = GROK_VOICES.find((v) => v.id === callData.voiceId)
   const selectedCharacter = getCharacterById(callData.characterId)
 
   return (
-    <main className="min-h-screen px-6 py-8">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }}>
-            <span className="text-6xl">📜</span>
-          </motion.div>
-          <h1 className="font-display text-3xl font-bold mt-4">Your Love Telegram</h1>
-          <p className="text-white/50 font-body mt-2">
-            Review your message before we call {callData.valentineName}
+    <main className="min-h-screen px-6 py-10">
+      <div className="wizard-shell">
+        <header className="mb-8 text-center">
+          <h1 className="font-display text-[52px] italic leading-[1.08] tracking-[0.04em] text-primary">
+            Preview Telegram
+          </h1>
+          <p className="mt-3 text-[14px] text-muted">
+            Review the script before placing the call to {callData.valentineName}.
           </p>
-        </div>
+        </header>
 
-        {/* Call info badges */}
-        <div className="flex flex-wrap justify-center gap-2 mb-6">
-          <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-white/60">
-            📞 {callData.valentinePhone}
+        <section className="mb-5 flex flex-wrap justify-center gap-2">
+          <span className="rounded-[10px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-3 py-1 text-[12px] text-muted">
+            {callData.valentinePhone}
           </span>
           {selectedVoice && (
-            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-white/60">
-              {selectedVoice.emoji} Voice: {selectedVoice.name}
+            <span className="rounded-[10px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-3 py-1 text-[12px] text-muted">
+              Voice: {selectedVoice.name}
             </span>
           )}
           {selectedCharacter && (
-            <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-white/60">
-              {selectedCharacter.emoji} {selectedCharacter.name}
+            <span className="rounded-[10px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-3 py-1 text-[12px] text-muted">
+              Character: {selectedCharacter.name}
             </span>
           )}
-        </div>
+        </section>
 
-        {/* Telegram paper */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+        <motion.article
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="telegram-paper mb-6"
+          transition={{ duration: 0.2 }}
+          className="telegram-paper"
         >
-          <div className="text-center mb-4">
-            <span className="font-fun text-sm text-amber-800/60">💘 CUPID CALL LOVE TELEGRAM 💘</span>
-          </div>
-          <div className="text-center mb-3">
-            <span className="font-body text-amber-900/50 text-sm">
-              From: <strong>{callData.senderName}</strong> → To: <strong>{callData.valentineName}</strong>
-            </span>
-          </div>
-          <hr className="border-amber-900/10 mb-4" />
-          <p className="font-body text-amber-900/80 leading-relaxed whitespace-pre-wrap text-base">
-            {callData.script}
+          <p className="text-center text-[12px] uppercase tracking-[0.14em] text-[#7c6650]">Cupid Call Telegram</p>
+          <p className="mt-4 text-center text-[13px] text-[#6d5a48]">
+            From <span className="font-medium">{callData.senderName}</span> to{' '}
+            <span className="font-medium">{callData.valentineName}</span>
           </p>
-          <hr className="border-amber-900/10 mt-4 mb-3" />
-          <p className="text-center text-amber-900/40 text-xs font-body italic">
-            &ldquo;Visit cupidcall.com — use code LOVE for 1 free call back!&rdquo;
+          <hr className="my-5 border-[#c9b89c]" />
+          <p className="message whitespace-pre-wrap">{callData.script}</p>
+          <hr className="my-5 border-[#c9b89c]" />
+          <p className="text-center text-[12px] text-[#7a6650]">
+            Shared with care through cupidcall.bitpixi.com
           </p>
-        </motion.div>
+        </motion.article>
 
-        {/* Live voice note */}
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 text-center">
-          <p className="text-white/50 text-sm font-body">
-            ⚡ <strong className="text-white/70">Powered by Grok Voice Agent</strong> — your telegram
-            will be delivered by live AI voice in real-time. After the message plays,
-            {callData.valentineName} can even talk back!
+        <section className="mt-6 surface-card text-center">
+          <p className="text-[13px] leading-[1.75] text-muted">
+            The recipient hears the telegram, then can respond briefly in real time.
           </p>
-        </div>
+        </section>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-3">
+        <section className="mt-6 flex flex-col gap-3">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-center">
-              <p className="text-red-400 text-sm">{error}</p>
+            <div className="rounded-[12px] border border-[rgba(184,107,107,0.4)] bg-[rgba(184,107,107,0.1)] px-4 py-3 text-center text-[13px] text-[var(--age-red)]">
+              {error}
             </div>
           )}
-
-          <button
-            onClick={handleSend}
-            disabled={isSending}
-            className={`btn-cupid w-full py-4 text-lg ${isSending ? 'opacity-50' : ''}`}
-          >
-            {isSending ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin">📞</span> Dialling {callData.valentineName}...
-              </span>
-            ) : (
-              `📞 Call ${callData.valentineName} Now`
-            )}
+          <button onClick={handleSend} disabled={isSending} className="btn-cupid w-full py-3">
+            {isSending ? 'Connecting call…' : 'Send call'}
           </button>
-
-          <button
-            onClick={() => router.push('/create')}
-            className="text-white/40 hover:text-white transition-colors text-sm text-center py-2"
-          >
-            ← Go back and edit
+          <button onClick={() => router.push('/create')} className="btn-secondary w-full">
+            Return to editor
           </button>
-        </div>
+        </section>
       </div>
     </main>
   )

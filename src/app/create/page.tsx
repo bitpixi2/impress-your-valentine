@@ -39,6 +39,12 @@ const INITIAL_FORM: FormData = {
   characterId: '',
 }
 
+const AGE_ACCENT: Record<AgeBand, string> = {
+  under_16: 'var(--age-green)',
+  '16_plus': 'var(--age-amber)',
+  '18_plus': 'var(--age-red)',
+}
+
 export default function CreatePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -52,10 +58,10 @@ export default function CreatePage() {
 
   const totalSteps = 4
   const stepTitles = [
-    'Sign In + Age Gate',
-    'Choose Content Type',
-    'Add Personal Touch',
-    'Pick Your Character',
+    'Sign In and Age Gate',
+    'Content Direction',
+    'Personal Detail',
+    'Character Selection',
   ]
 
   useEffect(() => {
@@ -67,12 +73,13 @@ export default function CreatePage() {
   const loadCredits = async () => {
     try {
       const res = await fetch('/api/credits')
-      if (res.ok) {
-        const data = await res.json()
-        setCredits(data.remainingCredits)
-        setHasUsedLoveCode(data.hasUsedLoveCode)
-      }
-    } catch { /* silently fail */ }
+      if (!res.ok) return
+      const data = await res.json()
+      setCredits(data.remainingCredits)
+      setHasUsedLoveCode(data.hasUsedLoveCode)
+    } catch {
+      // Ignore transient fetch issues in UI.
+    }
   }
 
   useEffect(() => {
@@ -86,15 +93,14 @@ export default function CreatePage() {
   }, [])
 
   useEffect(() => {
-    if (purchaseStatus === 'success') {
-      const poll = setInterval(loadCredits, 2000)
-      setTimeout(() => clearInterval(poll), 15000)
-    }
+    if (purchaseStatus !== 'success') return
+    const poll = setInterval(loadCredits, 2000)
+    setTimeout(() => clearInterval(poll), 15000)
   }, [purchaseStatus])
 
   useEffect(() => {
     if (session?.user?.name && !form.senderName) {
-      setForm((prev) => ({ ...prev, senderName: session.user!.name || '' }))
+      setForm((prev) => ({ ...prev, senderName: session.user?.name || '' }))
     }
   }, [session, form.senderName])
 
@@ -126,22 +132,25 @@ export default function CreatePage() {
         )
       case 3:
         return Boolean(form.characterId)
-      default: return false
+      default:
+        return false
     }
   }
 
   const handleSubmit = async () => {
     const chosenCharacter = getCharacterById(form.characterId)
     if (!chosenCharacter) {
-      setError('Pick a character before generating.')
+      setError('Select a character before generating the preview.')
       return
     }
     if (credits <= 0) {
-      setError("You need credits! Use code LOVE for 1 free call, or buy a 3-pack.")
+      setError('No call credits available. Apply a code or purchase a pack.')
       return
     }
+
     setIsGenerating(true)
     setError('')
+
     try {
       const scriptRes = await fetch('/api/generate-script', {
         method: 'POST',
@@ -151,190 +160,203 @@ export default function CreatePage() {
           voiceId: chosenCharacter.voiceId,
         }),
       })
+
       if (!scriptRes.ok) {
         const body = await scriptRes.json().catch(() => ({ error: 'Failed to generate script' }))
         throw new Error(body.error || 'Failed to generate script')
       }
+
       const { script } = await scriptRes.json()
 
-      sessionStorage.setItem('cupidCall', JSON.stringify({
-        ...form,
-        voiceId: chosenCharacter.voiceId,
-        script,
-      }))
+      sessionStorage.setItem(
+        'cupidCall',
+        JSON.stringify({
+          ...form,
+          voiceId: chosenCharacter.voiceId,
+          script,
+        })
+      )
+
       router.push('/preview')
     } catch (err: any) {
-      setError(err.message || 'Something went wrong generating your love telegram. Try again?')
+      setError(err.message || 'Could not generate preview. Please try again.')
       setIsGenerating(false)
     }
   }
 
   if (status === 'loading' || status === 'unauthenticated') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin text-4xl">💘</div>
-      </div>
+      <main className="min-h-screen px-6 py-16">
+        <div className="wizard-shell surface-card text-center">
+          <p className="text-muted">Loading your workspace…</p>
+        </div>
+      </main>
     )
   }
 
   return (
-    <main className="relative min-h-screen flex flex-col">
-      {/* Header */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-4 max-w-4xl mx-auto w-full">
-        <a href="/" className="flex items-center gap-2">
-          <span className="text-2xl">💘</span>
-          <span className="font-fun text-xl font-bold text-white">Cupid Call</span>
+    <main className="relative min-h-screen pb-28">
+      <nav className="wizard-shell flex items-center justify-between px-6 py-8">
+        <a href="/" className="text-[14px] uppercase tracking-[0.14em] text-muted">
+          Cupid Call
         </a>
-        <div className="flex items-center gap-3">
-          <span className="text-white/40 text-sm font-body">
-            {session?.user?.name || session?.user?.email}
-          </span>
-          <span className="text-white/20">•</span>
-          <span className="text-white/40 text-sm">Step {step + 1}/{totalSteps}</span>
+        <div className="text-[12px] uppercase tracking-[0.12em] text-muted">
+          Step {step + 1} / {totalSteps}
         </div>
       </nav>
 
-      {/* Credit bar */}
-      <div className="max-w-2xl mx-auto w-full px-6 mb-6">
+      <section className="wizard-shell px-6">
         <CreditBar credits={credits} hasUsedLoveCode={hasUsedLoveCode} onCreditsUpdated={loadCredits} />
-      </div>
+      </section>
 
-      {/* Progress dots */}
-      <div className="flex justify-center gap-2 mb-6">
-        {Array.from({ length: totalSteps }, (_, i) => (
-          <div key={i} className={`step-dot ${i === step ? 'active' : i < step ? 'completed' : 'pending'}`} />
-        ))}
-      </div>
-
-      {purchaseStatus === 'success' && (
-        <div className="max-w-2xl mx-auto w-full px-6 mb-4">
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
-            <p className="text-green-400 font-fun">🎉 Payment successful! 3 credits added.</p>
-          </div>
+      <section className="wizard-shell px-6 pb-12 pt-6">
+        <div className="mb-6 flex justify-center gap-2">
+          {Array.from({ length: totalSteps }, (_, i) => (
+            <div key={i} className={`step-dot ${i === step ? 'active' : i < step ? 'completed' : 'pending'}`} />
+          ))}
         </div>
-      )}
 
-      {/* Form */}
-      <div className="flex-1 flex items-start justify-center px-6 pb-32">
-        <div className="w-full max-w-2xl">
+        {purchaseStatus === 'success' && (
+          <div className="mb-5 rounded-[12px] border border-[rgba(123,175,123,0.35)] bg-[rgba(123,175,123,0.09)] px-4 py-3 text-center text-[13px] text-[var(--age-green)]">
+            Payment confirmed. Three call credits were added.
+          </div>
+        )}
+
+        <div className="surface-card">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
             >
-              <h2 className="font-display text-3xl md:text-4xl font-bold mb-2 text-center">
+              <h1 className="text-center font-display text-[46px] italic leading-[1.08] tracking-[0.04em] text-primary md:text-[56px]">
                 {stepTitles[step]}
-              </h2>
+              </h1>
 
-              {/* Step 0: Sign in + age + call info */}
               {step === 0 && (
-                <div className="space-y-6 mt-8">
-                  <p className="text-white/50 text-center font-body mb-6">
-                    Pick your age band first. It unlocks characters automatically.
+                <div className="mt-9 space-y-6">
+                  <p className="text-center text-[14px] text-muted">
+                    Select your age band to unlock matching characters.
                   </p>
 
-                  <div>
-                    <label className="block text-white/70 font-fun text-sm mb-2">Your age band</label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {AGE_OPTIONS.map((age) => (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    {AGE_OPTIONS.map((age) => {
+                      const active = form.senderAgeBand === age.id
+                      const border = AGE_ACCENT[age.id]
+                      return (
                         <button
                           key={age.id}
                           onClick={() => update('senderAgeBand', age.id)}
-                          className={`style-card text-left ${form.senderAgeBand === age.id ? 'selected' : ''}`}
+                          className={`style-card text-left ${active ? 'selected' : ''}`}
+                          style={{
+                            borderColor: active ? border : undefined,
+                            background: active ? 'rgba(255,255,255,0.06)' : undefined,
+                          }}
                         >
-                          <p className="font-fun text-white font-bold">{age.label}</p>
-                          <p className="text-white/40 text-xs">{age.desc}</p>
+                          <p className="text-[14px] font-medium text-primary">{age.label}</p>
+                          <p className="mt-1 text-[12px] text-muted">{age.desc}</p>
                         </button>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
 
-                  <div>
-                    <label className="block text-white/70 font-fun text-sm mb-2">Your Name</label>
-                    <input type="text" className="input-cupid" placeholder="The one sending love..."
-                      value={form.senderName} onChange={(e) => update('senderName', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-white/70 font-fun text-sm mb-2">Valentine&apos;s Name</label>
-                    <input type="text" className="input-cupid" placeholder="The lucky recipient..."
-                      value={form.valentineName} onChange={(e) => update('valentineName', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-white/70 font-fun text-sm mb-2">Their Phone Number</label>
-                    <input type="tel" className="input-cupid" placeholder="+61 4XX XXX XXX"
-                      value={form.valentinePhone} onChange={(e) => update('valentinePhone', e.target.value)} />
-                    <p className="text-white/30 text-xs mt-1">Include country code. Australian: +614...</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
+                      <input
+                        type="text"
+                        className="input-cupid"
+                        value={form.senderName}
+                        onChange={(e) => update('senderName', e.target.value)}
+                        placeholder="Enter your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Recipient name</label>
+                      <input
+                        type="text"
+                        className="input-cupid"
+                        value={form.valentineName}
+                        onChange={(e) => update('valentineName', e.target.value)}
+                        placeholder="Who should receive the call?"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Phone number</label>
+                      <input
+                        type="tel"
+                        className="input-cupid"
+                        value={form.valentinePhone}
+                        onChange={(e) => update('valentinePhone', e.target.value)}
+                        placeholder="+61..."
+                      />
+                      <p className="mt-2 text-[12px] text-muted">Include country code.</p>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 1: Content type */}
               {step === 1 && (
-                <div className="mt-8">
-                  <p className="text-white/50 text-center font-body mb-4">
-                    What should this call focus on?
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="mt-10">
+                  <p className="mb-6 text-center text-[14px] text-muted">Pick the emotional direction of the message.</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {CONTENT_TYPES.map((ct) => (
-                      <button key={ct.id} onClick={() => update('contentType', ct.id)}
-                        className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className="text-2xl">{ct.emoji}</span>
-                          <span className="font-fun font-bold text-white text-sm">{ct.name}</span>
+                      <button
+                        key={ct.id}
+                        onClick={() => update('contentType', ct.id)}
+                        className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-[24px] leading-none">{ct.emoji}</span>
+                          <div>
+                            <p className="text-[15px] font-medium text-primary">{ct.name}</p>
+                            <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
+                          </div>
                         </div>
-                        <p className="text-white/50 text-xs font-body">{ct.desc}</p>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Personal touch */}
               {step === 2 && (
-                <div className="space-y-5 mt-8">
-                  <p className="text-white/50 text-center font-body mb-6">
-                    Add the details only the two of you would understand.
+                <div className="mt-10 space-y-5">
+                  <p className="text-center text-[14px] text-muted">
+                    Add context that only the two of you would recognize.
                   </p>
                   <div>
-                    <label className="block text-white/70 font-fun text-sm mb-2">
-                      Personal touch (max 1000 chars)
-                    </label>
+                    <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Personal detail</label>
                     <textarea
-                      className="input-cupid min-h-[170px]"
+                      className="input-cupid min-h-[220px]"
                       maxLength={1000}
-                      placeholder="How you met, inside jokes, what you love about them, pet names, best memories..."
                       value={form.personalTouch}
                       onChange={(e) => update('personalTouch', e.target.value)}
+                      placeholder="How you met, shared phrases, private memories, the traits you admire..."
                     />
-                    <p className="text-white/30 text-xs mt-1">{personalTouchChars}/1000</p>
+                    <p className="mt-2 text-right text-[12px] text-muted">{personalTouchChars}/1000</p>
                   </div>
                   {form.contentType === 'custom' && (
                     <div>
-                      <label className="block text-white/70 font-fun text-sm mb-2">Your core message</label>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Core message</label>
                       <textarea
-                        className="input-cupid min-h-[90px]"
-                        placeholder="Write what you absolutely want included."
+                        className="input-cupid min-h-[140px]"
                         value={form.customMessage}
                         onChange={(e) => update('customMessage', e.target.value)}
+                        placeholder="The exact sentiment that must be included."
                       />
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Step 3: Character selection */}
               {step === 3 && (
-                <div className="mt-8">
-                  <p className="text-white/50 text-center font-body mb-2">
-                    Pick your character. Voice and delivery are baked in.
-                  </p>
-                  <p className="text-white/30 text-center font-body text-xs mb-6">
+                <div className="mt-10">
+                  <p className="mb-6 text-center text-[14px] text-muted">
                     Available now: {availableCharacters.length} of {CHARACTER_OPTIONS.length}
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {CHARACTER_OPTIONS.map((character) => {
                       const unlocked = form.senderAgeBand
                         ? isCharacterAvailableForAge(character.id, form.senderAgeBand)
@@ -345,34 +367,28 @@ export default function CreatePage() {
                           key={character.id}
                           onClick={() => unlocked && update('characterId', character.id)}
                           disabled={!unlocked}
-                          className={`style-card text-left ${
+                          className={`style-card character-card ${
                             form.characterId === character.id ? 'selected' : ''
-                          } ${!unlocked ? 'opacity-45 cursor-not-allowed' : ''}`}
+                          } ${!unlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          <div className="flex items-center justify-between gap-3 mb-1">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl">{character.emoji}</span>
-                              <span className="font-fun font-bold text-white text-sm">{character.name}</span>
-                            </div>
-                            <span className="text-[10px] bg-white/10 text-white/70 px-2 py-0.5 rounded-full">
-                              {character.ageGateLabel}
-                            </span>
-                          </div>
-                          <p className="text-white/50 text-xs font-body">{character.desc}</p>
-                          <p className="text-white/20 text-xs font-body italic mt-1">&ldquo;{character.sample}&rdquo;</p>
+                          <span className="emoji">{character.emoji}</span>
+                          <p className="title mt-4">{character.name}</p>
+                          <p className="meta mt-3">{character.ageGateLabel} • Voice {character.voiceId}</p>
+                          <p className="desc mt-3">{character.desc}</p>
                           {!unlocked && (
-                            <p className="text-red-300/70 text-[11px] mt-2">Locked by age gate</p>
+                            <p className="mt-4 text-[11px] uppercase tracking-[0.12em] text-[var(--age-red)]">
+                              Locked
+                            </p>
                           )}
                         </button>
                       )
                     })}
                   </div>
+
                   {selectedCharacter && (
-                    <div className="mt-4 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
-                      <p className="text-white/40 text-xs font-body">
-                        Selected: <strong className="text-white/70">{selectedCharacter.name}</strong>
-                        {' '}with voice <strong className="text-white/70">{selectedCharacter.voiceId}</strong>.
-                      </p>
+                    <div className="mt-5 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-4 py-3 text-center text-[13px] text-muted">
+                      Selected character: <span className="text-primary">{selectedCharacter.name}</span> with voice{' '}
+                      <span className="text-primary">{selectedCharacter.voiceId}</span>.
                     </div>
                   )}
                 </div>
@@ -380,28 +396,36 @@ export default function CreatePage() {
             </motion.div>
           </AnimatePresence>
         </div>
-      </div>
+      </section>
 
-      {/* Bottom nav */}
-      <div className="fixed bottom-0 left-0 right-0 bg-cupid-dark/90 backdrop-blur-lg border-t border-white/10 px-6 py-4 z-50">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <button onClick={() => (step > 0 ? setStep(step - 1) : router.push('/'))}
-            className="text-white/50 hover:text-white transition-colors font-body">
-            ← {step > 0 ? 'Back' : 'Home'}
+      <div className="bottom-bar fixed bottom-0 left-0 right-0 z-40 px-6 py-4">
+        <div className="wizard-shell flex items-center justify-between gap-4">
+          <button
+            onClick={() => (step > 0 ? setStep(step - 1) : router.push('/'))}
+            className="btn-secondary min-w-[96px]"
+          >
+            {step > 0 ? 'Back' : 'Home'}
           </button>
-          {error && <p className="text-red-400 text-sm font-body max-w-xs text-center">{error}</p>}
+
+          <p className="min-h-[20px] max-w-[270px] text-center text-[12px] leading-[1.5] text-[var(--age-red)]">
+            {error}
+          </p>
+
           {step < totalSteps - 1 ? (
-            <button onClick={() => setStep(step + 1)} disabled={!canProceed()}
-              className={`btn-cupid px-8 py-3 ${!canProceed() ? 'opacity-30 cursor-not-allowed' : ''}`}>
-              Next →
+            <button
+              onClick={() => setStep(step + 1)}
+              disabled={!canProceed()}
+              className="btn-cupid min-w-[96px]"
+            >
+              Continue
             </button>
           ) : (
-            <button onClick={handleSubmit}
+            <button
+              onClick={handleSubmit}
               disabled={!canProceed() || isGenerating || credits <= 0}
-              className={`btn-cupid px-8 py-3 ${!canProceed() || isGenerating || credits <= 0 ? 'opacity-30 cursor-not-allowed' : ''}`}>
-              {isGenerating ? (
-                <span className="flex items-center gap-2"><span className="animate-spin">💘</span> Generating love...</span>
-              ) : credits <= 0 ? '🔒 Need Credits' : '✨ Generate Preview'}
+              className="btn-cupid min-w-[146px]"
+            >
+              {isGenerating ? 'Generating…' : credits <= 0 ? 'Credits required' : 'Generate preview'}
             </button>
           )}
         </div>
