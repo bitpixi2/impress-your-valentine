@@ -1,0 +1,23 @@
+{
+  "name": "cupid-call-bridge",
+  "version": "1.0.0",
+  "description": "Twilio ↔ Grok Voice Agent WebSocket Bridge for Cupid Call",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch bridge.ts",
+    "start": "tsx bridge.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "@fastify/formbody": "^8.0.0",
+    "ws": "^8.18.0",
+    "twilio": "^5.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.0.0"
+  }
+}
