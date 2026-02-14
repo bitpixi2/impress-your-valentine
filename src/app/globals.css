@@ -57,6 +57,10 @@ body {
     linear-gradient(180deg, var(--bg-main) 0%, var(--bg-alt) 100%);
 }
 
+.landing-white-base {
+  background: #ffffff;
+}
+
 .landing-bg-image-wrap {
   position: absolute;
   inset: 0;

@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 export default function HomePage() {
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main className="landing-white-base relative min-h-screen overflow-hidden">
       <div className="landing-bg-image-wrap" aria-hidden>
         <img
           src="/cupid-phone-heart.png"
@@ -24,15 +24,22 @@ export default function HomePage() {
           transition={{ duration: 0.55 }}
           className="landing-copy-panel max-w-[660px]"
         >
-          <p className="font-display text-[44px] italic leading-[1.02] tracking-[0.04em] text-primary sm:text-[62px]">
+          <p className="font-display text-[44px] italic leading-[1.02] tracking-[0.04em] text-rose sm:text-[62px]">
             Cupid Call
           </p>
-          <h1 className="mt-3 font-display text-[36px] italic leading-[1.08] tracking-[0.03em] text-primary sm:text-[56px]">
-            Impress your Valentine, without saying a word yourself.
+          <h1 className="mt-3 font-display text-[29px] italic leading-[1.12] tracking-[0.03em] text-primary sm:text-[43px]">
+            Impress your Valentine,
+            <br />
+            without saying a word yourself.
           </h1>
           <p className="mt-6 max-w-[58ch] text-[15px] leading-[1.82] text-muted sm:text-[16px]">
-            Hate using the phone? Don&apos;t know what to say? Write what you feel. Pick a character.
-            Preview the plan. Then Cupid will call and say it for you!
+            Hate using the phone? Don&apos;t know what to say?
+            <br />
+            Pick your intent. Pick a character. Edit the plan.
+            <br />
+            Then Cupid will call and say it for you!
+            <br />
+            Your valentine receives a code to send one back.
           </p>
 
           <div className="mt-9">
