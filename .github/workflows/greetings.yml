@@ -1,0 +1,14 @@
+name: Greetings
+on: [pull_request_target, issues]
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "Love at first issue! 💘 Thanks for stopping by! I'll take a look and get back to you soon. In the meantime, the README is always there for you, no matter what."
+        pr-message: "Our first PR together! Be still, our beating CI pipeline! 💝 Thanks for putting yourself out there. I'll review your changes with care and tenderness. Please make sure everything is documented as communication is the key in any relationship."
