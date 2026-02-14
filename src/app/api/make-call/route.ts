@@ -75,8 +75,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      callSid: result.callSid,
+      callSid: result.callSid || null,
       callId: result.callId,
+      scheduled: Boolean(result.scheduled),
+      callStartsInMinutes: typeof result.callStartsInMinutes === 'number' ? result.callStartsInMinutes : 0,
+      preCallTextSent: result.preCallTextSent !== false,
       remainingCredits: creditResult.remaining,
     })
   } catch (error: any) {

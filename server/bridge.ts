@@ -33,12 +33,20 @@ const {
   BRIDGE_DOMAIN,  // Your ngrok/public URL for this bridge server
 } = process.env
 
+const PRE_CALL_SMS_LEAD_MINUTES = parseMinutes(process.env.PRE_CALL_SMS_LEAD_MINUTES, 5)
+const POST_CALL_SMS_DELAY_MINUTES = parseMinutes(process.env.POST_CALL_SMS_DELAY_MINUTES, 5)
+const PENDING_CALL_TTL_MS = Math.max(PRE_CALL_SMS_LEAD_MINUTES + POST_CALL_SMS_DELAY_MINUTES + 15, 20) * 60 * 1000
+const PRE_CALL_SMS_BODY = '💘 A Cupid Call is on its way. You might want to pick up and hit record.'
+const POST_CALL_SMS_BODY = '💘 Enjoyed Cupid Call? Send one 1 free with code LOVE at https://cupidcall.bitpixi.com. Reply STOP to opt out.'
+
 const fastify = Fastify({ logger: true })
 fastify.register(fastifyWebsocket)
 fastify.register(fastifyFormbody)
 
 // In-memory store for pending call configs
 const pendingCalls = new Map<string, CallConfig>()
+const callLookupBySid = new Map<string, { callId: string; phone: string; senderName: string; valentineName: string; createdAt: number }>()
+const postCallTextScheduled = new Set<string>()
 
 interface CallConfig {
   senderName: string
@@ -48,6 +56,16 @@ interface CallConfig {
   senderAgeBand: string
   voiceId: string  // Ara, Rex, Sal, Eve, Leo
   createdAt: number
+}
+
+function parseMinutes(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback
+  return parsed
+}
+
+function callStartDelayMs(): number {
+  return PRE_CALL_SMS_LEAD_MINUTES * 60 * 1000
 }
 
 // ===== Health check =====
@@ -87,33 +105,151 @@ fastify.post('/outbound-call', async (request, reply) => {
     createdAt: Date.now(),
   })
 
-  // Auto-cleanup after 5 minutes
-  setTimeout(() => pendingCalls.delete(id), 5 * 60 * 1000)
+  // Auto-cleanup after delay + call window
+  setTimeout(() => pendingCalls.delete(id), PENDING_CALL_TTL_MS)
 
   const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
   const bridgeUrl = BRIDGE_DOMAIN || `http://localhost:${BRIDGE_PORT}`
+  const streamUrl = `${bridgeUrl.replace('http', 'ws')}/media-stream`
+  const statusCallbackUrl = `${bridgeUrl}/twilio/call-status`
 
-  try {
+  const sendPreCallText = async () => {
+    try {
+      await client.messages.create({
+        to: phone,
+        from: TWILIO_PHONE_NUMBER,
+        body: PRE_CALL_SMS_BODY,
+      })
+      return true
+    } catch (err: any) {
+      fastify.log.error({ err, phone }, 'Failed to send pre-call SMS')
+      return false
+    }
+  }
+
+  const placeCall = async () => {
     const call = await client.calls.create({
       to: phone,
       from: TWILIO_PHONE_NUMBER,
+      statusCallback: statusCallbackUrl,
+      statusCallbackEvent: ['completed'],
+      statusCallbackMethod: 'POST',
       twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Pause length="1"/>
   <Connect>
-    <Stream url="${bridgeUrl.replace('http', 'ws')}/media-stream">
+    <Stream url="${streamUrl}">
       <Parameter name="callId" value="${id}"/>
     </Stream>
   </Connect>
 </Response>`,
     })
 
-    return { success: true, callSid: call.sid, callId: id }
+    callLookupBySid.set(call.sid, {
+      callId: id,
+      phone,
+      senderName,
+      valentineName: valentineName || 'there',
+      createdAt: Date.now(),
+    })
+
+    return call
+  }
+
+  try {
+    const preCallTextSent = await sendPreCallText()
+    const delayMs = callStartDelayMs()
+
+    if (delayMs > 0) {
+      setTimeout(async () => {
+        try {
+          const scheduledCall = await placeCall()
+          fastify.log.info({ callSid: scheduledCall.sid, callId: id }, 'Scheduled outbound call started')
+        } catch (err: any) {
+          pendingCalls.delete(id)
+          fastify.log.error({ err, callId: id }, 'Scheduled call failed to start')
+        }
+      }, delayMs)
+
+      return {
+        success: true,
+        callId: id,
+        scheduled: true,
+        callStartsInMinutes: PRE_CALL_SMS_LEAD_MINUTES,
+        preCallTextSent,
+      }
+    }
+
+    const call = await placeCall()
+    return {
+      success: true,
+      callSid: call.sid,
+      callId: id,
+      scheduled: false,
+      callStartsInMinutes: 0,
+      preCallTextSent,
+    }
   } catch (err: any) {
     pendingCalls.delete(id)
     fastify.log.error(err)
     return reply.status(500).send({ error: err.message })
   }
+})
+
+// ===== Twilio status callback (for post-call referral SMS) =====
+fastify.post('/twilio/call-status', async (request, reply) => {
+  const body = request.body as any
+  const callSid = body?.CallSid as string | undefined
+  const callStatus = body?.CallStatus as string | undefined
+
+  if (!callSid || !callStatus) {
+    return reply.status(200).send({ ok: true, ignored: true })
+  }
+
+  if (callStatus !== 'completed') {
+    return reply.status(200).send({ ok: true, ignored: true })
+  }
+
+  if (postCallTextScheduled.has(callSid)) {
+    return reply.status(200).send({ ok: true, ignored: true })
+  }
+
+  const callRecord = callLookupBySid.get(callSid)
+  if (!callRecord) {
+    fastify.log.warn({ callSid }, 'No call record found for completed call')
+    return reply.status(200).send({ ok: true, ignored: true })
+  }
+
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
+    return reply.status(500).send({ error: 'Twilio not configured' })
+  }
+
+  postCallTextScheduled.add(callSid)
+  const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  const delayMs = POST_CALL_SMS_DELAY_MINUTES * 60 * 1000
+
+  setTimeout(async () => {
+    try {
+      await client.messages.create({
+        to: callRecord.phone,
+        from: TWILIO_PHONE_NUMBER,
+        body: POST_CALL_SMS_BODY,
+      })
+      fastify.log.info({ callSid, phone: callRecord.phone }, 'Post-call referral SMS sent')
+    } catch (err: any) {
+      fastify.log.error({ err, callSid, phone: callRecord.phone }, 'Failed to send post-call SMS')
+    } finally {
+      postCallTextScheduled.delete(callSid)
+      callLookupBySid.delete(callSid)
+      pendingCalls.delete(callRecord.callId)
+    }
+  }, delayMs)
+
+  return reply.status(200).send({
+    ok: true,
+    scheduled: true,
+    sendInMinutes: POST_CALL_SMS_DELAY_MINUTES,
+  })
 })
 
 // ===== Twilio Media Stream WebSocket =====
@@ -313,8 +449,14 @@ IMPORTANT:
 setInterval(() => {
   const now = Date.now()
   for (const [id, config] of pendingCalls.entries()) {
-    if (now - config.createdAt > 10 * 60 * 1000) {
+    if (now - config.createdAt > PENDING_CALL_TTL_MS) {
       pendingCalls.delete(id)
+    }
+  }
+  for (const [sid, call] of callLookupBySid.entries()) {
+    if (now - call.createdAt > PENDING_CALL_TTL_MS + (POST_CALL_SMS_DELAY_MINUTES * 60 * 1000)) {
+      callLookupBySid.delete(sid)
+      postCallTextScheduled.delete(sid)
     }
   }
 }, 60 * 1000)

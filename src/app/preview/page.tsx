@@ -55,6 +55,10 @@ export default function PreviewPage() {
       const sentPayload = {
         ...callData,
         callSid: data.callSid,
+        callId: data.callId,
+        scheduled: data.scheduled,
+        callStartsInMinutes: data.callStartsInMinutes,
+        preCallTextSent: data.preCallTextSent,
         remainingCredits: data.remainingCredits,
       }
       sessionStorage.setItem('cupidCallResult', JSON.stringify(sentPayload))
