@@ -726,7 +726,7 @@ YOUR MISSION:
 ${script}
 --- END TELEGRAM ---
 
-3. After delivering the telegram, say: "Happy Valentine's Day, ${valentineName}! If you'd like to send a Cupid Call back to ${senderName}, visit cupid call dot com and use the code LOVE for one free call. That's cupid call dot com, code L-O-V-E."
+3. After delivering the telegram, say: "Happy Valentine's Day, ${valentineName}! If you'd like to send a Cupid Call back to ${senderName}, visit cupid call dot bitpixi dot com and use the code LOVE for one free call. That's cupid call dot bitpixi dot com, code L-O-V-E."
 4. Then ask: "Is there anything you'd like to say back to ${senderName}? I can pass along a message!"
 5. If they respond, have a brief warm conversation (2-3 exchanges max), then say goodbye.
 6. If they don't respond or say goodbye, end warmly.
