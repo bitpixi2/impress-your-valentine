@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/cupid-call-logo.png" alt="Cupid Call logo" width="360" />
+</p>
+
 # Participant
 
 | Field | Your Answer |
@@ -11,9 +15,30 @@
 |---|---|
 | Project Name | Cupid Call |
 | One-Line Description | AI-generated Valentine phone calls delivered live with a character voice. |
-| Demo Video Link | _Add your demo link here_ |
+| Demo Video Link | https://youtu.be/ccE7ewLQnI4 · https://youtu.be/RvdbwWJcyHk |
 | Tech Stack | Next.js 14, React, TypeScript, Tailwind CSS, NextAuth, Stripe, Twilio, Supabase, Fastify WebSocket bridge |
 | AI Provider(s) Used | xAI Grok (text + voice/realtime) |
+
+## Demo Videos
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://youtu.be/ccE7ewLQnI4">
+        <img src="https://img.youtube.com/vi/ccE7ewLQnI4/hqdefault.jpg" alt="Cupid Call Demo Video 1" width="360" />
+      </a>
+      <br />
+      <a href="https://youtu.be/ccE7ewLQnI4">Watch Demo 1</a>
+    </td>
+    <td align="center">
+      <a href="https://youtu.be/RvdbwWJcyHk">
+        <img src="https://img.youtube.com/vi/RvdbwWJcyHk/hqdefault.jpg" alt="Cupid Call Demo Video 2" width="360" />
+      </a>
+      <br />
+      <a href="https://youtu.be/RvdbwWJcyHk">Watch Demo 2</a>
+    </td>
+  </tr>
+</table>
 
 # About Your Project
 
