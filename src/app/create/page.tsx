@@ -389,7 +389,55 @@ export default function CreatePage() {
       setVoicePreviewError('Choose a character first.')
       return
     }
-    await previewVoiceForCharacter(selectedCharacter.id)
+    const previewScript = scriptDraft.trim() || form.script.trim()
+    if (!previewScript) {
+      setVoicePreviewError('No script available to preview yet.')
+      return
+    }
+
+    if (isPlayingVoicePreview && activeVoiceCharacter === selectedCharacter.id) {
+      stopVoicePreview()
+      return
+    }
+
+    setVoicePreviewError('')
+    try {
+      setLoadingVoiceCharacter(selectedCharacter.id)
+      const res = await fetch('/api/preview-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script: previewScript,
+          characterId: selectedCharacter.id,
+          voiceId: selectedCharacter.voiceId || form.voiceId || 'Ara',
+          styleHint: CHARACTER_VOICE_STYLE_HINT[selectedCharacter.id],
+        }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not generate voice preview')
+
+      const previewDataUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`
+      if (!audioRef.current) {
+        audioRef.current = new Audio(previewDataUrl)
+        audioRef.current.onended = () => {
+          setIsPlayingVoicePreview(false)
+          setActiveVoiceCharacter('')
+        }
+      } else {
+        audioRef.current.src = previewDataUrl
+      }
+
+      await audioRef.current.play()
+      setIsPlayingVoicePreview(true)
+      setActiveVoiceCharacter(selectedCharacter.id)
+    } catch (err: any) {
+      setVoicePreviewError(err.message || 'Voice preview failed.')
+      setIsPlayingVoicePreview(false)
+      setActiveVoiceCharacter('')
+    } finally {
+      setLoadingVoiceCharacter('')
+    }
   }
 
   const handleSend = async () => {
@@ -608,9 +656,6 @@ export default function CreatePage() {
                                 loading="lazy"
                               />
                             </div>
-                            <p className="mx-auto max-w-[320px] text-[14px] leading-[1.8] text-muted">
-                              {CHARACTER_VOICE_PREVIEW_TEXT[selectedCharacter.id]}
-                            </p>
                             <button
                               onClick={handlePreviewVoice}
                               disabled={Boolean(loadingVoiceCharacter && loadingVoiceCharacter !== selectedCharacter.id)}
