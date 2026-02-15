@@ -599,7 +599,7 @@ export default function CreatePage() {
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[0.9fr_1.1fr]">
                       <div className="space-y-5">
                         {selectedCharacter && (
-                          <div className="space-y-4">
+                          <div className="space-y-4 text-center">
                             <div className="character-choice-ring mx-auto w-full max-w-[240px]">
                               <img
                                 src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
@@ -608,7 +608,7 @@ export default function CreatePage() {
                                 loading="lazy"
                               />
                             </div>
-                            <p className="text-[14px] leading-[1.8] text-muted">
+                            <p className="mx-auto max-w-[320px] text-[14px] leading-[1.8] text-muted">
                               {CHARACTER_VOICE_PREVIEW_TEXT[selectedCharacter.id]}
                             </p>
                             <button
@@ -635,7 +635,7 @@ export default function CreatePage() {
                           Script
                         </label>
                         <textarea
-                          className="input-cupid min-h-[920px] md:min-h-[620px] lg:min-h-[620px]"
+                          className="input-cupid min-h-[760px] md:min-h-[340px] lg:min-h-[340px]"
                           value={scriptDraft}
                           onChange={(e) => {
                             setScriptDraft(e.target.value)

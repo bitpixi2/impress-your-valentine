@@ -1,9 +1,25 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 
 export default function SentPage() {
+  const [valentineName, setValentineName] = useState('Your valentine')
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem('cupidCallSent')
+    if (!stored) return
+    try {
+      const data = JSON.parse(stored)
+      if (typeof data?.valentineName === 'string' && data.valentineName.trim()) {
+        setValentineName(data.valentineName.trim())
+      }
+    } catch {
+      // ignore malformed session state
+    }
+  }, [])
+
   return (
     <main className="min-h-screen px-6 py-16">
       <motion.section
@@ -23,7 +39,7 @@ export default function SentPage() {
         </div>
 
         <h1 className="mt-4 font-display text-[54px] italic leading-[1.08] tracking-[0.04em] text-primary">
-          Richie will be anonymously Cupid called!
+          {valentineName} will be Cupid called!
         </h1>
 
         <div className="mx-auto mt-9 max-w-[560px] rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-5 py-5 text-left">

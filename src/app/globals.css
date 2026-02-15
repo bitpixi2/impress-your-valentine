@@ -264,7 +264,7 @@ body {
   background: rgba(196, 122, 142, 0.22);
   transform: scaleX(0);
   transform-origin: left center;
-  animation: loading-fill-left-right 1.2s ease-in-out infinite;
+  animation: loading-fill-left-right 6s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
 }
