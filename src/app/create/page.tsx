@@ -92,6 +92,14 @@ const CHARACTER_VOICE_PREVIEW_TEXT: Record<CharacterId, string> = {
   'sakura-confession': "Hey, I'm Sakura from Cupid Call. 18+ only!",
 }
 
+const CHARACTER_VOICE_STYLE_HINT: Record<CharacterId, string> = {
+  'kid-bot': 'Playful, bright, child-friendly, crisp pacing.',
+  'victorian-gentleman': 'Clear, polished, refined male delivery with elegant articulation.',
+  'southern-belle': 'Warm, charming, soft, lightly musical cadence.',
+  'nocturne-vampire': 'Deep, handsome, gruff baritone with slow, intimate pacing.',
+  'sakura-confession': 'Soft, sincere, feminine delivery with cinematic intimacy.',
+}
+
 function countWords(value: string) {
   const text = value.trim()
   if (!text) return 0
@@ -112,7 +120,7 @@ export default function CreatePage() {
   const [isSending, setIsSending] = useState(false)
   const [scriptDraft, setScriptDraft] = useState('')
   const [scriptSaveMessage, setScriptSaveMessage] = useState('')
-  const [isLoadingVoicePreview, setIsLoadingVoicePreview] = useState(false)
+  const [loadingVoiceCharacter, setLoadingVoiceCharacter] = useState<CharacterId | ''>('')
   const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false)
   const [voicePreviewCache, setVoicePreviewCache] = useState<Partial<Record<CharacterId, string>>>({})
   const [activeVoiceCharacter, setActiveVoiceCharacter] = useState<CharacterId | ''>('')
@@ -301,13 +309,9 @@ export default function CreatePage() {
     setError('')
   }
 
-  const handlePreviewVoice = async () => {
-    if (!selectedCharacter) {
-      setVoicePreviewError('Choose a character first.')
-      return
-    }
-
-    const characterId = selectedCharacter.id
+  const previewVoiceForCharacter = async (characterId: CharacterId) => {
+    const character = getCharacterById(characterId)
+    if (!character) return
 
     if (isPlayingVoicePreview && activeVoiceCharacter === characterId) {
       stopVoicePreview()
@@ -320,14 +324,15 @@ export default function CreatePage() {
 
     try {
       if (!previewDataUrl) {
-        setIsLoadingVoicePreview(true)
+        setLoadingVoiceCharacter(characterId)
         const res = await fetch('/api/preview-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             script: previewScript,
             characterId,
-            voiceId: selectedCharacter.voiceId || form.voiceId || 'Ara',
+            voiceId: character.voiceId || form.voiceId || 'Ara',
+            styleHint: CHARACTER_VOICE_STYLE_HINT[characterId],
           }),
         })
 
@@ -356,8 +361,16 @@ export default function CreatePage() {
       setIsPlayingVoicePreview(false)
       setActiveVoiceCharacter('')
     } finally {
-      setIsLoadingVoicePreview(false)
+      setLoadingVoiceCharacter('')
     }
+  }
+
+  const handlePreviewVoice = async () => {
+    if (!selectedCharacter) {
+      setVoicePreviewError('Choose a character first.')
+      return
+    }
+    await previewVoiceForCharacter(selectedCharacter.id)
   }
 
   const handleSend = async () => {
@@ -430,8 +443,14 @@ export default function CreatePage() {
   return (
     <main className="relative min-h-screen pb-16">
       <nav className={`${shellClass} flex items-center justify-between px-6 py-8`}>
-        <a href="/" className="text-[14px] uppercase tracking-[0.14em] text-muted">
-          Cupid Call
+        <a href="/" aria-label="Cupid Call home">
+          <img
+            src="/cupid-call-logo.png"
+            alt="Cupid Call"
+            className="h-auto w-[180px] max-w-[46vw]"
+            loading="eager"
+            decoding="async"
+          />
         </a>
         <div className="text-[12px] uppercase tracking-[0.12em] text-muted">
           Step {step + 1} / {totalSteps}
@@ -468,25 +487,37 @@ export default function CreatePage() {
                 <div className="mt-8">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
                     {CHARACTER_OPTIONS.map((character) => (
-                      <button
-                        key={character.id}
-                        onClick={() => selectCharacter(character.id)}
-                        aria-label={CHARACTER_MENU_IMAGE[character.id].alt}
-                        className={`overflow-hidden rounded-[12px] border border-transparent bg-transparent p-0 transition-all duration-200 ${
-                          form.characterId === character.id
-                            ? 'border-[rgba(196,122,142,0.9)]'
-                            : 'hover:border-[rgba(255,255,255,0.25)]'
-                        }`}
-                      >
-                        <img
-                          src={CHARACTER_MENU_IMAGE[character.id].src}
-                          alt={CHARACTER_MENU_IMAGE[character.id].alt}
-                          className="block h-auto w-full"
-                          loading="lazy"
-                        />
-                      </button>
+                      <div key={character.id} className="space-y-3">
+                        <button
+                          onClick={() => selectCharacter(character.id)}
+                          aria-label={CHARACTER_MENU_IMAGE[character.id].alt}
+                          className="character-choice-btn"
+                        >
+                          <div className={`character-choice-ring ${form.characterId === character.id ? 'selected' : ''}`}>
+                            <img
+                              src={CHARACTER_MENU_IMAGE[character.id].src}
+                              alt={CHARACTER_MENU_IMAGE[character.id].alt}
+                              className="character-choice-img"
+                              loading="lazy"
+                            />
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => previewVoiceForCharacter(character.id)}
+                          className="btn-secondary w-full"
+                          disabled={Boolean(loadingVoiceCharacter && loadingVoiceCharacter !== character.id)}
+                        >
+                          {loadingVoiceCharacter === character.id
+                            ? 'Loading...'
+                            : isPlayingVoicePreview && activeVoiceCharacter === character.id
+                              ? 'Pause Voice'
+                              : 'Play Voice'}
+                        </button>
+                      </div>
                     ))}
                   </div>
+                  {voicePreviewError && <p className="mt-4 text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
                 </div>
               )}
 
@@ -548,53 +579,55 @@ export default function CreatePage() {
                       <p className="mt-3 text-[14px] text-muted">Loading...</p>
                     </div>
                   ) : (
-                    <div className="space-y-5">
-                      {selectedCharacter && (
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                          <img
-                            src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
-                            alt={CHARACTER_MENU_IMAGE[selectedCharacter.id].alt}
-                            className="h-auto w-full max-w-[260px] rounded-[10px]"
-                            loading="lazy"
-                          />
-                          <div className="space-y-3">
-                            <p className="max-w-[520px] text-[14px] leading-[1.8] text-muted">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                      <div className="space-y-5">
+                        {selectedCharacter && (
+                          <div className="space-y-4">
+                            <img
+                              src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
+                              alt={CHARACTER_MENU_IMAGE[selectedCharacter.id].alt}
+                              className="h-auto w-full rounded-[12px]"
+                              loading="lazy"
+                            />
+                            <p className="text-[14px] leading-[1.8] text-muted">
                               {CHARACTER_VOICE_PREVIEW_TEXT[selectedCharacter.id]}
                             </p>
                             <button
                               onClick={handlePreviewVoice}
-                              disabled={isLoadingVoicePreview}
+                              disabled={Boolean(loadingVoiceCharacter && loadingVoiceCharacter !== selectedCharacter.id)}
                               className="btn-secondary min-w-[190px]"
                             >
-                              {isLoadingVoicePreview
+                              {loadingVoiceCharacter === selectedCharacter.id
                                 ? 'Loading...'
                                 : isPlayingVoicePreview && activeVoiceCharacter === selectedCharacter.id
                                   ? 'Pause Voice'
                                   : 'Play Voice'}
                             </button>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          onClick={handleRegenerate}
-                          disabled={isGeneratingScript || regenerateCooldown > 0}
-                          className="btn-secondary min-w-[190px]"
-                        >
-                          {isGeneratingScript
-                            ? 'Loading...'
-                            : regenerateCooldown > 0
-                              ? `Re-generate (${regenerateCooldown}s)`
-                              : 'Re-generate'}
-                        </button>
-                        <button
-                          onClick={handleSaveScript}
-                          disabled={!isScriptDirty}
-                          className="btn-secondary min-w-[160px]"
-                        >
-                          Save
-                        </button>
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={handleRegenerate}
+                            disabled={isGeneratingScript || regenerateCooldown > 0}
+                            className="btn-secondary min-w-[190px]"
+                          >
+                            {isGeneratingScript
+                              ? 'Loading...'
+                              : regenerateCooldown > 0
+                                ? `Re-generate (${regenerateCooldown}s)`
+                                : 'Re-generate'}
+                          </button>
+                          <button
+                            onClick={handleSaveScript}
+                            disabled={!isScriptDirty}
+                            className="btn-secondary min-w-[160px]"
+                          >
+                            Save
+                          </button>
+                        </div>
+
+                        {voicePreviewError && <p className="text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
                       </div>
 
                       <div>
@@ -602,7 +635,7 @@ export default function CreatePage() {
                           Script
                         </label>
                         <textarea
-                          className="input-cupid min-h-[520px]"
+                          className="input-cupid min-h-[560px] lg:min-h-[780px]"
                           value={scriptDraft}
                           onChange={(e) => {
                             setScriptDraft(e.target.value)
@@ -610,11 +643,9 @@ export default function CreatePage() {
                           }}
                           placeholder="Your generated script appears here."
                         />
+                        {isScriptDirty && <p className="mt-2 text-[12px] text-[var(--age-amber)]">Unsaved changes.</p>}
+                        {scriptSaveMessage && <p className="mt-2 text-[12px] text-[var(--age-green)]">{scriptSaveMessage}</p>}
                       </div>
-
-                      {isScriptDirty && <p className="text-[12px] text-[var(--age-amber)]">Unsaved changes.</p>}
-                      {scriptSaveMessage && <p className="text-[12px] text-[var(--age-green)]">{scriptSaveMessage}</p>}
-                      {voicePreviewError && <p className="text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
                     </div>
                   )}
                 </div>

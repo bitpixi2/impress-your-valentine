@@ -111,13 +111,13 @@ function pcm16ToWav(pcmData: Buffer, sampleRate: number): Buffer {
   return wav
 }
 
-async function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer> {
+async function synthesizePreviewAudio(script: string, voiceId: string, styleHint = ''): Promise<Buffer> {
   const models = getRealtimeModelOrder()
   let lastError: Error | null = null
 
   for (const model of models) {
     try {
-      return await synthesizePreviewAudioForModel(script, voiceId, model)
+      return await synthesizePreviewAudioForModel(script, voiceId, model, styleHint)
     } catch (err: any) {
       lastError = err instanceof Error ? err : new Error(err?.message || String(err))
       fastify.log.warn({ model, err: lastError.message }, 'Preview audio model attempt failed')
@@ -127,7 +127,12 @@ async function synthesizePreviewAudio(script: string, voiceId: string): Promise<
   throw lastError || new Error('All preview audio model attempts failed')
 }
 
-function synthesizePreviewAudioForModel(script: string, voiceId: string, model: string): Promise<Buffer> {
+function synthesizePreviewAudioForModel(
+  script: string,
+  voiceId: string,
+  model: string,
+  styleHint = ''
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     if (!XAI_API_KEY) {
       reject(new Error('XAI_API_KEY is not configured'))
@@ -190,7 +195,7 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
         type: 'session.update',
         session: {
           voice: voiceId,
-          instructions: 'Read the user script in a warm, natural tone. Keep pacing clean and expressive.',
+          instructions: `Read the user script in a warm, natural tone. Keep pacing clean and expressive.${styleHint ? ` Voice style: ${styleHint}` : ''}`,
           audio: {
             input: {
               format: {
@@ -285,7 +290,7 @@ fastify.get('/', async () => ({
 
 // ===== Script audio preview (Grok voice) =====
 fastify.post('/preview-audio', async (request, reply) => {
-  const { script, voiceId = 'Ara' } = request.body as any
+  const { script, voiceId = 'Ara', styleHint = '' } = request.body as any
 
   if (!script || typeof script !== 'string') {
     return reply.status(400).send({ error: 'Script is required' })
@@ -300,7 +305,11 @@ fastify.post('/preview-audio', async (request, reply) => {
   }
 
   try {
-    const wav = await synthesizePreviewAudio(text, voiceId)
+    const wav = await synthesizePreviewAudio(
+      text,
+      voiceId,
+      typeof styleHint === 'string' ? styleHint.trim().slice(0, 220) : ''
+    )
     return {
       audioBase64: wav.toString('base64'),
       mimeType: 'audio/wav',
@@ -697,9 +706,9 @@ function buildSystemPrompt(config: CallConfig): string {
 
   const CHARACTER_DELIVERY_PROMPTS: Record<string, string> = {
     'kid-bot': 'Kid-Friendly: playful, wholesome, and caring with tiny robot flavor words.',
-    'victorian-gentleman': 'Gentleman: Darcy-style 1800s elegance with simpler spoken phrasing.',
+    'victorian-gentleman': 'Gentleman: Darcy-style 1800s elegance with simpler spoken phrasing and a clean, polished male tone.',
     'southern-belle': 'Lady: warm charm with light Southern words and old-world eloquence, never caricatured.',
-    'nocturne-vampire': 'Vampire: male, intense, poetic, mature, and consensual with non-graphic sensuality.',
+    'nocturne-vampire': 'Vampire: male, intense, poetic, mature, and consensual with non-graphic sensuality. Deliver in a deep, handsome, slightly gruff baritone, slower and more intimate than Gentleman.',
     'sakura-confession': 'Sakura: female, soft, sincere, cinematic, emotionally direct, and mature with non-graphic sensuality.',
   }
 

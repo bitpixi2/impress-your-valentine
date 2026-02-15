@@ -58,6 +58,15 @@ export default function CreditBar({ credits, onCreditsUpdated }: CreditBarProps)
 
   return (
     <div className="surface-card">
+      <div className="-mx-6 -mt-6 mb-5 overflow-hidden rounded-t-[14px] border-b border-[var(--surface-border)]">
+        <img
+          src="/add-credits.jpg"
+          alt="Add credits artwork"
+          className="h-[160px] w-full object-cover"
+          loading="lazy"
+        />
+      </div>
+
       <p className="text-[12px] uppercase tracking-[0.12em] text-muted">Credits</p>
       <p className="mt-1 text-[15px] text-primary">
         Credits: <span className="font-medium">{credits}</span> call{credits !== 1 ? 's' : ''} available
@@ -86,24 +95,26 @@ export default function CreditBar({ credits, onCreditsUpdated }: CreditBarProps)
         </p>
       )}
 
-      <button onClick={buyPack} disabled={isBuying} className="btn-cupid mt-5 w-full">
-        {isBuying ? 'Processing…' : 'Buy 3-call pack ($10 AUD)'}
-      </button>
-      <p className="mt-2 text-[12px] leading-[1.7] text-muted">
-        Currently available for Australia, New Zealand, United States, and Canada.
-      </p>
-      <p className="mt-3 text-[12px] leading-[1.7] text-muted">
-        Request more countries.{' '}
-        <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
-          Request
-        </a>
-      </p>
-      <p className="mt-1 text-[12px] leading-[1.7] text-muted">
-        Report an issue with credits.{' '}
-        <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
-          Report
-        </a>
-      </p>
+      <div className="mt-9 border-t border-[var(--surface-border)] pt-7">
+        <button onClick={buyPack} disabled={isBuying} className="btn-cupid w-full">
+          {isBuying ? 'Processing…' : 'Buy 3-call pack ($10 AUD)'}
+        </button>
+        <p className="mt-2 text-[12px] leading-[1.7] text-muted">
+          Currently available for Australia, New Zealand, United States, and Canada.
+        </p>
+        <p className="mt-3 text-[12px] leading-[1.7] text-muted">
+          Request more countries.{' '}
+          <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
+            Request
+          </a>
+        </p>
+        <p className="mt-1 text-[12px] leading-[1.7] text-muted">
+          Report an issue with credits.{' '}
+          <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
+            Report
+          </a>
+        </p>
+      </div>
     </div>
   )
 }

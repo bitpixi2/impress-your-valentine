@@ -12,6 +12,16 @@ export default function SentPage() {
         transition={{ duration: 0.25 }}
         className="wizard-shell surface-card text-center"
       >
+        <div className="-mx-6 -mt-6 mb-6 overflow-hidden rounded-t-[14px] border-b border-[var(--surface-border)]">
+          <img
+            src="/message-sent.jpg"
+            alt="Message sent decoration"
+            className="h-[200px] w-full object-cover"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+
         <h1 className="mt-4 font-display text-[54px] italic leading-[1.08] tracking-[0.04em] text-primary">
           Richie will be anonymously Cupid called!
         </h1>

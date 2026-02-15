@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const { script, characterId, voiceId } = await req.json()
+    const { script, characterId, voiceId, styleHint } = await req.json()
     const text = typeof script === 'string' ? script.trim() : ''
     if (!text) {
       return NextResponse.json({ error: 'Script is required' }, { status: 400 })
@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         script: text,
         voiceId: selectedVoice,
+        styleHint: typeof styleHint === 'string' ? styleHint : '',
       }),
     })
 
