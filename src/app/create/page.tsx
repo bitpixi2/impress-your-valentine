@@ -38,6 +38,29 @@ const INITIAL_FORM: FormData = {
 
 const STEP_TITLES = ['Pick Your Character', 'Add Details', 'Preview + Send']
 
+const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = {
+  'kid-bot': {
+    src: '/menu1-kidfriendly.png',
+    alt: 'Kid Bot character selection',
+  },
+  'southern-belle': {
+    src: '/menu2-lady.png',
+    alt: 'Southern Belle character selection',
+  },
+  'victorian-gentleman': {
+    src: '/menu3-gentleman.png',
+    alt: 'Victorian Gentleman character selection',
+  },
+  'sakura-confession': {
+    src: '/menu4-sakura.png',
+    alt: 'Sakura Confession character selection',
+  },
+  'nocturne-vampire': {
+    src: '/menu5-vampire.png',
+    alt: 'Nocturne Vampire character selection',
+  },
+}
+
 export default function CreatePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -158,7 +181,7 @@ export default function CreatePage() {
 
   const canContinue = () => {
     if (step === 0) return Boolean(form.characterId)
-    if (step === 1) return Boolean(form.contentType && form.personalTouch.trim().length >= 20)
+    if (step === 1) return Boolean(form.contentType)
     return false
   }
 
@@ -168,8 +191,8 @@ export default function CreatePage() {
       setError('Pick a character before generating.')
       return
     }
-    if (!form.contentType || form.personalTouch.trim().length < 20) {
-      setError('Choose a content type and add at least 20 characters of detail.')
+    if (!form.contentType) {
+      setError('Choose a content type before generating.')
       return
     }
 
@@ -186,7 +209,6 @@ export default function CreatePage() {
           valentineName: form.valentineName || 'your valentine',
           contentType: form.contentType,
           personalTouch: form.personalTouch,
-          customMessage: '',
           characterId: character.id,
         }),
       })
@@ -397,20 +419,24 @@ export default function CreatePage() {
 
               {step === 0 && (
                 <div className="mt-8">
-                  <p className="mb-6 text-center text-[14px] text-muted">
-                    Pick one character style to shape your script and voice.
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
                     {CHARACTER_OPTIONS.map((character) => (
                       <button
                         key={character.id}
                         onClick={() => selectCharacter(character.id)}
-                        className={`style-card character-card ${form.characterId === character.id ? 'selected' : ''}`}
+                        aria-label={CHARACTER_MENU_IMAGE[character.id].alt}
+                        className={`overflow-hidden rounded-[12px] border border-transparent bg-transparent p-0 transition-all duration-200 ${
+                          form.characterId === character.id
+                            ? 'border-[rgba(196,122,142,0.9)]'
+                            : 'hover:border-[rgba(255,255,255,0.25)]'
+                        }`}
                       >
-                        <span className="emoji">{character.emoji}</span>
-                        <p className="title mt-4">{character.name}</p>
-                        <p className="meta mt-3">{character.ageGateLabel} • Voice {character.voiceId}</p>
-                        <p className="desc mt-3">{character.desc}</p>
+                        <img
+                          src={CHARACTER_MENU_IMAGE[character.id].src}
+                          alt={CHARACTER_MENU_IMAGE[character.id].alt}
+                          className="block h-auto w-full"
+                          loading="lazy"
+                        />
                       </button>
                     ))}
                   </div>
@@ -420,22 +446,16 @@ export default function CreatePage() {
               {step === 1 && (
                 <div className="mt-8 space-y-6">
                   <div>
-                    <p className="mb-5 text-center text-[14px] text-muted">
-                      Choose message intent, then add all the private detail in one field.
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
                       {CONTENT_TYPES.map((ct) => (
                         <button
                           key={ct.id}
                           onClick={() => updateContentType(ct.id)}
                           className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
                         >
-                          <div className="flex items-start gap-3">
-                            <span className="text-[24px] leading-none">{ct.emoji}</span>
-                            <div>
-                              <p className="text-[15px] font-medium text-primary">{ct.name}</p>
-                              <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
-                            </div>
+                          <div>
+                            <p className="text-[15px] font-medium text-primary">{ct.name}</p>
+                            <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
                           </div>
                         </button>
                       ))}
@@ -444,16 +464,16 @@ export default function CreatePage() {
 
                   <div>
                     <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                      Personal details (1,000 max)
+                      Personal details (500 characters maximum)
                     </label>
                     <textarea
                       className="input-cupid min-h-[240px]"
-                      maxLength={1000}
+                      maxLength={500}
                       value={form.personalTouch}
                       onChange={(e) => updatePersonalTouch(e.target.value)}
                       placeholder="How you met, inside jokes, what you love, pet names, memories..."
                     />
-                    <p className="mt-2 text-right text-[12px] text-muted">{personalTouchChars}/1000</p>
+                    <p className="mt-2 text-right text-[12px] text-muted">{personalTouchChars}/500</p>
                   </div>
                 </div>
               )}

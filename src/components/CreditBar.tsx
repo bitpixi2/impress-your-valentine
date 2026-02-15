@@ -76,10 +76,11 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
             </button>
           )}
           <button onClick={buyPack} disabled={isBuying} className="btn-cupid">
-            {isBuying ? 'Processing…' : 'Buy 3-call pack ($10)'}
+            {isBuying ? 'Processing…' : 'Buy 3-call pack ($10 AUD)'}
           </button>
         </div>
       </div>
+      <p className="mt-2 text-[12px] text-muted">3-pack checkout is currently available for ANZ or US only.</p>
 
       <AnimatePresence>
         {showPromo && (
@@ -102,12 +103,6 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
                 {isRedeeming ? 'Applying…' : 'Apply code'}
               </button>
             </div>
-
-            {!hasUsedLoveCode && (
-              <p className="mt-3 text-[12px] text-muted">
-                Hint: you can use <span className="text-primary">LOVE</span> once for a free call.
-              </p>
-            )}
 
             {promoMessage && (
               <p className={`mt-2 text-[13px] ${promoError ? 'text-[var(--age-red)]' : 'text-[var(--age-green)]'}`}>

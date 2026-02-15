@@ -11,7 +11,6 @@ export type ContentTypeId =
   | 'always-wanted-to-say'
   | 'hype-up'
   | 'apology'
-  | 'custom'
 export type GrokVoiceId = 'Ara' | 'Rex' | 'Sal' | 'Eve' | 'Leo'
 
 export interface CupidCallFormData {
@@ -21,7 +20,6 @@ export interface CupidCallFormData {
   senderAgeBand: AgeBand
   contentType: ContentTypeId
   personalTouch: string
-  customMessage: string
   characterId: CharacterId
   voiceId: GrokVoiceId
   script?: string
@@ -169,12 +167,6 @@ export const CONTENT_TYPES: ContentTypeOption[] = [
     emoji: '🕊️',
     name: 'Apology',
     desc: 'Sincere ownership, repair, and commitment.',
-  },
-  {
-    id: 'custom',
-    emoji: '🎨',
-    name: 'Custom Message',
-    desc: 'Your own core message, polished into a telegram.',
   },
 ]
 
