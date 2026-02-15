@@ -37,7 +37,7 @@ const INITIAL_FORM: FormData = {
   voiceId: '',
 }
 
-const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview + Send']
+const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview', 'Add Credits + Send']
 const REGENERATE_COOLDOWN_SECONDS = 12
 
 const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = {
@@ -86,6 +86,14 @@ const CONTENT_TYPE_IMAGE: Record<ContentTypeId, { src: string; alt: string }> = 
   },
 }
 
+const CHARACTER_VOICE_PREVIEW_TEXT: Record<CharacterId, string> = {
+  'kid-bot': "Hey, I'm Kid-friendly from Cupid Call. Suitable for children.",
+  'southern-belle': "Greetings, I'm Lady from Cupid Call. Happy to be of service.",
+  'victorian-gentleman': "Greetings, I'm Gentleman from Cupid Call. Happy to be of service.",
+  'nocturne-vampire': "Hey, I'm Vampire from Cupid Call. 18+ only!",
+  'sakura-confession': "Hey, I'm Sakura from Cupid Call. 18+ only!",
+}
+
 function countWords(value: string) {
   const text = value.trim()
   if (!text) return 0
@@ -98,25 +106,28 @@ export default function CreatePage() {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormData>(INITIAL_FORM)
   const [error, setError] = useState('')
-  const [audioError, setAudioError] = useState('')
+  const [voicePreviewError, setVoicePreviewError] = useState('')
   const [credits, setCredits] = useState(0)
   const [hasUsedLoveCode, setHasUsedLoveCode] = useState(false)
   const [purchaseStatus, setPurchaseStatus] = useState('')
 
   const [isGeneratingScript, setIsGeneratingScript] = useState(false)
   const [isSending, setIsSending] = useState(false)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [scriptDraft, setScriptDraft] = useState('')
+  const [scriptSaveMessage, setScriptSaveMessage] = useState('')
+  const [isLoadingVoicePreview, setIsLoadingVoicePreview] = useState(false)
+  const [isPlayingVoicePreview, setIsPlayingVoicePreview] = useState(false)
+  const [voicePreviewCache, setVoicePreviewCache] = useState<Partial<Record<CharacterId, string>>>({})
+  const [activeVoiceCharacter, setActiveVoiceCharacter] = useState<CharacterId | ''>('')
   const [regenerateCooldown, setRegenerateCooldown] = useState(0)
-  const [audioPreviewDataUrl, setAudioPreviewDataUrl] = useState('')
-  const [audioPreviewScriptSnapshot, setAudioPreviewScriptSnapshot] = useState('')
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const totalSteps = 3
+  const totalSteps = 4
   const shellClass = 'mx-auto w-full max-w-[1320px]'
   const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
   const personalTouchWords = countWords(form.personalTouch)
+  const isScriptDirty = scriptDraft !== form.script
 
   const loadCredits = async () => {
     try {
@@ -162,11 +173,12 @@ export default function CreatePage() {
     return () => clearInterval(timer)
   }, [regenerateCooldown])
 
-  const stopAudio = () => {
+  const stopVoicePreview = () => {
     if (!audioRef.current) return
     audioRef.current.pause()
     audioRef.current.currentTime = 0
-    setIsPlayingAudio(false)
+    setIsPlayingVoicePreview(false)
+    setActiveVoiceCharacter('')
   }
 
   const selectCharacter = (characterId: CharacterId) => {
@@ -177,31 +189,30 @@ export default function CreatePage() {
       voiceId: character?.voiceId || '',
       script: '',
     }))
-    stopAudio()
-    setAudioError('')
-    setAudioPreviewDataUrl('')
-    setAudioPreviewScriptSnapshot('')
+    setScriptDraft('')
+    setScriptSaveMessage('')
+    stopVoicePreview()
+    setVoicePreviewError('')
   }
 
   const updateContentType = (contentType: ContentTypeId) => {
     setForm((prev) => ({ ...prev, contentType, script: '' }))
-    stopAudio()
-    setAudioError('')
-    setAudioPreviewDataUrl('')
-    setAudioPreviewScriptSnapshot('')
+    setScriptDraft('')
+    setScriptSaveMessage('')
+    setVoicePreviewError('')
   }
 
   const updatePersonalTouch = (personalTouch: string) => {
     setForm((prev) => ({ ...prev, personalTouch, script: '' }))
-    stopAudio()
-    setAudioError('')
-    setAudioPreviewDataUrl('')
-    setAudioPreviewScriptSnapshot('')
+    setScriptDraft('')
+    setScriptSaveMessage('')
+    setVoicePreviewError('')
   }
 
   const canContinue = () => {
     if (step === 0) return Boolean(form.characterId)
     if (step === 1) return Boolean(form.contentType) && personalTouchWords <= 500
+    if (step === 2) return Boolean(form.script.trim()) && !isScriptDirty
     return false
   }
 
@@ -222,7 +233,7 @@ export default function CreatePage() {
 
     setIsGeneratingScript(true)
     setError('')
-    setAudioError('')
+    setVoicePreviewError('')
 
     try {
       const scriptRes = await fetch('/api/generate-script', {
@@ -248,8 +259,8 @@ export default function CreatePage() {
         script,
         voiceId: character.voiceId,
       }))
-      setAudioPreviewDataUrl('')
-      setAudioPreviewScriptSnapshot('')
+      setScriptDraft(script)
+      setScriptSaveMessage('')
     } catch (err: any) {
       setError(err.message || 'Could not generate script. Please try again.')
     } finally {
@@ -268,6 +279,11 @@ export default function CreatePage() {
       if (!form.script) {
         await generateScript()
       }
+      return
+    }
+    if (step === 2) {
+      if (!canContinue()) return
+      setStep(3)
     }
   }
 
@@ -277,55 +293,74 @@ export default function CreatePage() {
     await generateScript()
   }
 
-  const handleAudioPreview = async () => {
-    if (!form.script.trim()) {
-      setAudioError('Add script text before previewing audio.')
+  const handleSaveScript = () => {
+    const nextScript = scriptDraft.trim()
+    if (!nextScript) {
+      setError('Script cannot be empty.')
+      return
+    }
+    setForm((prev) => ({ ...prev, script: nextScript }))
+    setScriptDraft(nextScript)
+    setScriptSaveMessage('Saved')
+    setError('')
+  }
+
+  const handlePreviewVoice = async () => {
+    if (!selectedCharacter) {
+      setVoicePreviewError('Choose a character first.')
       return
     }
 
-    if (isPlayingAudio) {
-      stopAudio()
+    const characterId = selectedCharacter.id
+
+    if (isPlayingVoicePreview && activeVoiceCharacter === characterId) {
+      stopVoicePreview()
       return
     }
 
-    setAudioError('')
-    let previewDataUrl = audioPreviewDataUrl
+    setVoicePreviewError('')
+    let previewDataUrl = voicePreviewCache[characterId] || ''
+    const previewScript = CHARACTER_VOICE_PREVIEW_TEXT[characterId]
 
     try {
-      if (!previewDataUrl || audioPreviewScriptSnapshot !== form.script) {
-        setIsLoadingAudio(true)
+      if (!previewDataUrl) {
+        setIsLoadingVoicePreview(true)
         const res = await fetch('/api/preview-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            script: form.script,
-            characterId: form.characterId,
-            voiceId: selectedCharacter?.voiceId || form.voiceId || 'Ara',
+            script: previewScript,
+            characterId,
+            voiceId: selectedCharacter.voiceId || form.voiceId || 'Ara',
           }),
         })
 
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error || 'Could not generate audio preview')
+        if (!res.ok) throw new Error(data.error || 'Could not generate voice preview')
 
         previewDataUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`
-        setAudioPreviewDataUrl(previewDataUrl)
-        setAudioPreviewScriptSnapshot(form.script)
+        setVoicePreviewCache((prev) => ({ ...prev, [characterId]: previewDataUrl }))
       }
 
       if (!audioRef.current) {
         audioRef.current = new Audio(previewDataUrl)
-        audioRef.current.onended = () => setIsPlayingAudio(false)
+        audioRef.current.onended = () => {
+          setIsPlayingVoicePreview(false)
+          setActiveVoiceCharacter('')
+        }
       } else {
         audioRef.current.src = previewDataUrl
       }
 
       await audioRef.current.play()
-      setIsPlayingAudio(true)
+      setIsPlayingVoicePreview(true)
+      setActiveVoiceCharacter(characterId)
     } catch (err: any) {
-      setAudioError(err.message || 'Audio preview failed.')
-      setIsPlayingAudio(false)
+      setVoicePreviewError(err.message || 'Voice preview failed.')
+      setIsPlayingVoicePreview(false)
+      setActiveVoiceCharacter('')
     } finally {
-      setIsLoadingAudio(false)
+      setIsLoadingVoicePreview(false)
     }
   }
 
@@ -407,10 +442,6 @@ export default function CreatePage() {
           Step {step + 1} / {totalSteps}
         </div>
       </nav>
-
-      <section className={`${shellClass} px-6`}>
-        <CreditBar credits={credits} hasUsedLoveCode={hasUsedLoveCode} onCreditsUpdated={loadCredits} />
-      </section>
 
       <section className={`${shellClass} px-6 pb-12 pt-6`}>
         <div className="mb-6 flex justify-center gap-2">
@@ -520,120 +551,142 @@ export default function CreatePage() {
                       <p className="mt-3 text-[14px] text-muted">Loading...</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.8fr_1fr]">
-                      <div className="space-y-4">
-                        {form.characterId && (
-                          <div className="rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-3">
-                            <img
-                              src={CHARACTER_MENU_IMAGE[form.characterId].src}
-                              alt={CHARACTER_MENU_IMAGE[form.characterId].alt}
-                              className="mx-auto h-auto w-full max-w-[260px] rounded-[10px]"
-                              loading="lazy"
-                            />
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-3">
-                          <button
-                            onClick={handleRegenerate}
-                            disabled={isGeneratingScript || regenerateCooldown > 0}
-                            className="btn-secondary min-w-[190px]"
-                          >
-                            {isGeneratingScript
-                              ? 'Loading...'
-                              : regenerateCooldown > 0
-                                ? `Re-generate (${regenerateCooldown}s)`
-                                : 'Re-generate'}
-                          </button>
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                            Script Preview
-                          </label>
-                          <div className="min-h-[520px] rounded-[10px] border border-[var(--surface-border)] bg-[rgba(255,255,255,0.015)] px-4 py-4">
-                            <p className="whitespace-pre-wrap text-[14px] leading-[1.75] text-primary">
-                              {form.script || 'Your generated script appears here.'}
+                    <div className="space-y-5">
+                      {selectedCharacter && (
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                          <img
+                            src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
+                            alt={CHARACTER_MENU_IMAGE[selectedCharacter.id].alt}
+                            className="h-auto w-full max-w-[260px] rounded-[10px]"
+                            loading="lazy"
+                          />
+                          <div className="space-y-3">
+                            <p className="max-w-[520px] text-[14px] leading-[1.8] text-muted">
+                              {CHARACTER_VOICE_PREVIEW_TEXT[selectedCharacter.id]}
                             </p>
+                            <button
+                              onClick={handlePreviewVoice}
+                              disabled={isLoadingVoicePreview}
+                              className="btn-secondary min-w-[190px]"
+                            >
+                              {isLoadingVoicePreview
+                                ? 'Loading...'
+                                : isPlayingVoicePreview && activeVoiceCharacter === selectedCharacter.id
+                                  ? 'Pause Voice'
+                                  : 'Play Voice'}
+                            </button>
                           </div>
                         </div>
+                      )}
 
-                        <div className="flex flex-wrap gap-3">
-                          <button
-                            onClick={handleAudioPreview}
-                            disabled={isLoadingAudio || !form.script.trim()}
-                            className="btn-secondary min-w-[190px]"
-                          >
-                            {isLoadingAudio
-                              ? 'Loading...'
-                              : isPlayingAudio
-                                ? 'Pause Audio Preview'
-                                : 'Audio Preview'}
-                          </button>
-                        </div>
-                        {audioError && <p className="text-[12px] text-[var(--age-red)]">{audioError}</p>}
-                      </div>
-
-                      <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-6">
-                        <div>
-                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
-                          <input
-                            type="text"
-                            className="input-cupid"
-                            value={form.senderName}
-                            onChange={(e) => setForm((prev) => ({ ...prev, senderName: e.target.value }))}
-                            placeholder="Your name"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your email</label>
-                          <input
-                            type="email"
-                            className="input-cupid"
-                            value={form.senderEmail}
-                            onChange={(e) => setForm((prev) => ({ ...prev, senderEmail: e.target.value }))}
-                            placeholder="you@example.com"
-                          />
-                        </div>
-                        <p className="text-[12px] leading-[1.6] text-muted">
-                          We won&apos;t show this to your valentine. It&apos;s used for credit tracking and fraud controls.
-                        </p>
-                        <div>
-                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Their name</label>
-                          <input
-                            type="text"
-                            className="input-cupid"
-                            value={form.valentineName}
-                            onChange={(e) => setForm((prev) => ({ ...prev, valentineName: e.target.value }))}
-                            placeholder="Recipient name"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                            Their phone number
-                          </label>
-                          <input
-                            type="tel"
-                            className="input-cupid"
-                            value={form.valentinePhone}
-                            onChange={(e) => setForm((prev) => ({ ...prev, valentinePhone: e.target.value }))}
-                            placeholder="+61..."
-                          />
-                        </div>
-
+                      <div className="flex flex-wrap gap-3">
                         <button
-                          onClick={handleSend}
-                          disabled={isSending || isGeneratingScript || credits <= 0}
-                          className="btn-cupid mt-2 w-full py-3"
+                          onClick={handleRegenerate}
+                          disabled={isGeneratingScript || regenerateCooldown > 0}
+                          className="btn-secondary min-w-[190px]"
                         >
-                          {isSending ? 'Sending Call…' : credits <= 0 ? 'Credits Required' : 'Send Call'}
+                          {isGeneratingScript
+                            ? 'Loading...'
+                            : regenerateCooldown > 0
+                              ? `Re-generate (${regenerateCooldown}s)`
+                              : 'Re-generate'}
                         </button>
-                        <p className="text-[12px] text-muted">
-                          {selectedCharacter
-                            ? `Character: ${selectedCharacter.name} • Voice ${selectedCharacter.voiceId}`
-                            : 'Choose a character to continue.'}
-                        </p>
+                        <button
+                          onClick={handleSaveScript}
+                          disabled={!isScriptDirty}
+                          className="btn-secondary min-w-[160px]"
+                        >
+                          Save
+                        </button>
                       </div>
+
+                      <div>
+                        <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                          Script
+                        </label>
+                        <textarea
+                          className="input-cupid min-h-[520px]"
+                          value={scriptDraft}
+                          onChange={(e) => {
+                            setScriptDraft(e.target.value)
+                            setScriptSaveMessage('')
+                          }}
+                          placeholder="Your generated script appears here."
+                        />
+                      </div>
+
+                      {isScriptDirty && <p className="text-[12px] text-[var(--age-amber)]">Unsaved changes.</p>}
+                      {scriptSaveMessage && <p className="text-[12px] text-[var(--age-green)]">{scriptSaveMessage}</p>}
+                      {voicePreviewError && <p className="text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
                     </div>
                   )}
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_1fr]">
+                  <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-6">
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
+                      <input
+                        type="text"
+                        className="input-cupid"
+                        value={form.senderName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, senderName: e.target.value }))}
+                        placeholder="Your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your email</label>
+                      <input
+                        type="email"
+                        className="input-cupid"
+                        value={form.senderEmail}
+                        onChange={(e) => setForm((prev) => ({ ...prev, senderEmail: e.target.value }))}
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <p className="text-[12px] leading-[1.6] text-muted">
+                      We won&apos;t show this to your valentine. It&apos;s used for credit tracking and fraud controls.
+                    </p>
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Their name</label>
+                      <input
+                        type="text"
+                        className="input-cupid"
+                        value={form.valentineName}
+                        onChange={(e) => setForm((prev) => ({ ...prev, valentineName: e.target.value }))}
+                        placeholder="Recipient name"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                        Their phone number
+                      </label>
+                      <input
+                        type="tel"
+                        className="input-cupid"
+                        value={form.valentinePhone}
+                        onChange={(e) => setForm((prev) => ({ ...prev, valentinePhone: e.target.value }))}
+                        placeholder="+61..."
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleSend}
+                      disabled={isSending || isGeneratingScript || credits <= 0}
+                      className="btn-cupid mt-2 w-full py-3"
+                    >
+                      {isSending ? 'Sending Call…' : credits <= 0 ? 'Credits Required' : 'Send Call'}
+                    </button>
+                    <p className="text-[12px] text-muted">
+                      {selectedCharacter
+                        ? `Character: ${selectedCharacter.name} • Voice ${selectedCharacter.voiceId}`
+                        : 'Choose a character to continue.'}
+                    </p>
+                  </div>
+
+                  <CreditBar credits={credits} hasUsedLoveCode={hasUsedLoveCode} onCreditsUpdated={loadCredits} />
                 </div>
               )}
             </motion.div>
