@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { getCharacterById, type GrokVoiceId } from '@/lib/types'
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8081'
@@ -8,11 +6,6 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const authSession = await getServerSession(authOptions)
-    if (!authSession?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-
     const { script, characterId, voiceId } = await req.json()
     const text = typeof script === 'string' ? script.trim() : ''
     if (!text) {

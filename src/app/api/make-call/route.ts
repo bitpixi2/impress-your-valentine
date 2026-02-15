@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { useCredit, getOrCreateUser } from '@/lib/credits'
+import { attachGuestCookie, getGuestUserId } from '@/lib/guest'
 import { getCharacterById } from '@/lib/types'
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8081'
@@ -9,27 +8,48 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth check
-    const authSession = await getServerSession(authOptions)
-    if (!authSession?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-    const userId = (authSession.user as any).userId || authSession.user.email
-    getOrCreateUser(userId, authSession.user.email)
+    const { userId, needsCookie } = getGuestUserId(req)
 
-    // Credit check
-    const creditResult = useCredit(userId)
-    if (!creditResult.success) {
-      return NextResponse.json(
-        { error: creditResult.message, needsCredits: true },
-        { status: 402 }
-      )
-    }
-
-    const { phone, senderName, valentineName, script, characterId } = await req.json()
+    const { phone, senderName, senderEmail, valentineName, script, characterId } = await req.json()
 
     if (!phone || !senderName || !script || !characterId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    await getOrCreateUser(
+      userId,
+      typeof senderEmail === 'string' && senderEmail.trim()
+        ? senderEmail.trim().toLowerCase()
+        : `${userId}@guest.local`
+    )
+
+    const senderEmailSafe = typeof senderEmail === 'string' ? senderEmail.trim().toLowerCase() : ''
+    if (!senderEmailSafe || !senderEmailSafe.includes('@')) {
+      return NextResponse.json({ error: 'A valid sender email is required' }, { status: 400 })
+    }
+
+    const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim() || 'unknown'
+    const userAgent = req.headers.get('user-agent') || 'unknown'
+    const maskedPhone = `${phone}`.replace(/\d(?=\d{2})/g, '*')
+    console.info('[CupidCall] outbound call request', {
+      userId,
+      senderEmail: senderEmailSafe,
+      senderName,
+      valentineName,
+      phone: maskedPhone,
+      ip,
+      userAgent,
+    })
+
+    // Credit check
+    const creditResult = await useCredit(userId)
+    if (!creditResult.success) {
+      const denied = NextResponse.json(
+        { error: creditResult.message, needsCredits: true },
+        { status: 402 }
+      )
+      if (needsCookie) attachGuestCookie(denied, userId)
+      return denied
     }
 
     const character = getCharacterById(characterId)
@@ -44,6 +64,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         phone,
         senderName,
+        senderEmail: senderEmailSafe,
         valentineName,
         script,
         characterId: character.id,
@@ -59,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     const result = await bridgeRes.json()
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       callSid: result.callSid || null,
       callId: result.callId,
@@ -68,6 +89,8 @@ export async function POST(req: NextRequest) {
       preCallTextSent: result.preCallTextSent !== false,
       remainingCredits: creditResult.remaining,
     })
+    if (needsCookie) attachGuestCookie(response, userId)
+    return response
   } catch (error: any) {
     console.error('Make call error:', error)
     return NextResponse.json(

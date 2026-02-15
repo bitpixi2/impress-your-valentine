@@ -1,30 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { getUserCredits, getOrCreateUser } from '@/lib/credits'
+import { attachGuestCookie, getGuestUserId } from '@/lib/guest'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-
-    const userId = (session.user as any).userId || session.user.email
+    const { userId, needsCookie } = getGuestUserId(req)
+    const placeholderEmail = `${userId}@guest.local`
 
     // Ensure user exists
-    getOrCreateUser(userId, session.user.email)
-    const credits = getUserCredits(userId)
+    await getOrCreateUser(userId, placeholderEmail)
+    const credits = await getUserCredits(userId)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       remainingCredits: credits?.remainingCredits || 0,
       totalCredits: credits?.totalCredits || 0,
       usedCredits: credits?.usedCredits || 0,
       hasUsedLoveCode: credits?.promoCodesUsed.includes('LOVE') || false,
     })
+
+    if (needsCookie) attachGuestCookie(response, userId)
+    return response
   } catch (error: any) {
     console.error('Credits check error:', error)
     return NextResponse.json(

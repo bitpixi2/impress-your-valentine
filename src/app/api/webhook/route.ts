@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
 
     if (userId && credits > 0) {
       // Ensure user exists
-      getOrCreateUser(userId, email)
+      await getOrCreateUser(userId, email)
 
       // Add credits
-      const result = addPurchasedCredits(
+      const result = await addPurchasedCredits(
         userId,
         credits,
         session.amount_total || 0,

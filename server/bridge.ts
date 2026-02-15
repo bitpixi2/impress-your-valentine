@@ -41,7 +41,7 @@ const POST_CALL_SMS_BODY = '💘 Enjoyed Cupid Call? Send one 1 free with code L
 const PREVIEW_AUDIO_SAMPLE_RATE = parsePositiveInt(process.env.PREVIEW_AUDIO_SAMPLE_RATE, 24000)
 const PREVIEW_AUDIO_TIMEOUT_MS = parsePositiveInt(process.env.PREVIEW_AUDIO_TIMEOUT_MS, 22000)
 const PRIMARY_REALTIME_MODEL = process.env.XAI_REALTIME_MODEL || 'grok-4-1-fast-non-reasoning'
-const FALLBACK_REALTIME_MODEL = process.env.XAI_REALTIME_FALLBACK_MODEL || 'grok-3-mini'
+const FALLBACK_REALTIME_MODEL = process.env.XAI_REALTIME_FALLBACK_MODEL || 'grok-4-1-fast-non-reasoning'
 
 const fastify = Fastify({ logger: true })
 fastify.register(fastifyWebsocket)

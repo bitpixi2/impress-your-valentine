@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import Stripe from 'stripe'
+import { getOrCreateUser } from '@/lib/credits'
+import { attachGuestCookie, getGuestUserId } from '@/lib/guest'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    const { userId, needsCookie } = getGuestUserId(req)
+    let email = ''
+    try {
+      const body = await req.json()
+      email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    } catch {
+      // Allow empty body for checkout.
     }
-
-    const userId = (session.user as any).userId || session.user.email
+    const user = await getOrCreateUser(userId, email || `${userId}@guest.local`)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const stripeSecret = process.env.STRIPE_SECRET_KEY
 
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
       mode: 'payment',
       success_url: `${appUrl}/create?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/create?purchase=cancelled`,
-      customer_email: session.user.email,
+      customer_email: user.email.includes('@guest.local') ? undefined : user.email,
       metadata: {
         userId,
         credits: '3',
@@ -53,7 +55,9 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ url: checkoutSession.url })
+    const response = NextResponse.json({ url: checkoutSession.url })
+    if (needsCookie) attachGuestCookie(response, userId)
+    return response
   } catch (error: any) {
     console.error('Stripe checkout error:', error)
     return NextResponse.json(

@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { applyPromoCode, getOrCreateUser } from '@/lib/credits'
+import { attachGuestCookie, getGuestUserId } from '@/lib/guest'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-
-    const userId = (session.user as any).userId || session.user.email
+    const { userId, needsCookie } = getGuestUserId(req)
     const { code } = await req.json()
 
     if (!code) {
@@ -21,15 +14,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Ensure user exists
-    getOrCreateUser(userId, session.user.email)
+    await getOrCreateUser(userId, `${userId}@guest.local`)
 
-    const result = applyPromoCode(userId, code)
+    const result = await applyPromoCode(userId, code)
 
-    if (result.success) {
-      return NextResponse.json(result)
-    } else {
-      return NextResponse.json(result, { status: 400 })
-    }
+    const response = NextResponse.json(result, { status: result.success ? 200 : 400 })
+    if (needsCookie) attachGuestCookie(response, userId)
+    return response
   } catch (error: any) {
     console.error('Promo code error:', error)
     return NextResponse.json(

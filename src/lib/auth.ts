@@ -39,7 +39,7 @@ export const authOptions: AuthOptions = {
       if (session.user) {
         (session.user as any).userId = token.userId as string
         if (token.userId && session.user.email) {
-          getOrCreateUser(token.userId as string, session.user.email)
+          await getOrCreateUser(token.userId as string, session.user.email)
         }
       }
       return session

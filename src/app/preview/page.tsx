@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { GROK_VOICES, getCharacterById } from '@/lib/types'
 
 export default function PreviewPage() {
-  const { data: session } = useSession()
   const router = useRouter()
   const [callData, setCallData] = useState<any>(null)
   const [isSending, setIsSending] = useState(false)

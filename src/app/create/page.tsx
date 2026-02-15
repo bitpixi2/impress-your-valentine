@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSession, signIn } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import CreditBar from '@/components/CreditBar'
@@ -19,6 +18,7 @@ interface FormData {
   contentType: ContentTypeId | ''
   personalTouch: string
   senderName: string
+  senderEmail: string
   valentineName: string
   valentinePhone: string
   script: string
@@ -30,6 +30,7 @@ const INITIAL_FORM: FormData = {
   contentType: '',
   personalTouch: '',
   senderName: '',
+  senderEmail: '',
   valentineName: '',
   valentinePhone: '',
   script: '',
@@ -37,6 +38,7 @@ const INITIAL_FORM: FormData = {
 }
 
 const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview + Send']
+const REGENERATE_COOLDOWN_SECONDS = 12
 
 const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = {
   'kid-bot': {
@@ -62,7 +64,6 @@ const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = 
 }
 
 export default function CreatePage() {
-  const { data: session, status } = useSession()
   const router = useRouter()
 
   const [step, setStep] = useState(0)
@@ -77,6 +78,7 @@ export default function CreatePage() {
   const [isSending, setIsSending] = useState(false)
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [regenerateCooldown, setRegenerateCooldown] = useState(0)
   const [audioPreviewDataUrl, setAudioPreviewDataUrl] = useState('')
   const [audioPreviewScriptSnapshot, setAudioPreviewScriptSnapshot] = useState('')
 
@@ -86,12 +88,6 @@ export default function CreatePage() {
   const shellClass = 'mx-auto w-full max-w-[1320px]'
   const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
   const personalTouchChars = form.personalTouch.length
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      signIn(undefined, { callbackUrl: '/create' })
-    }
-  }, [status])
 
   const loadCredits = async () => {
     try {
@@ -106,8 +102,8 @@ export default function CreatePage() {
   }
 
   useEffect(() => {
-    if (session) loadCredits()
-  }, [session])
+    loadCredits()
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -121,12 +117,6 @@ export default function CreatePage() {
   }, [purchaseStatus])
 
   useEffect(() => {
-    if (session?.user?.name && !form.senderName) {
-      setForm((prev) => ({ ...prev, senderName: session.user?.name || '' }))
-    }
-  }, [session, form.senderName])
-
-  useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause()
@@ -134,6 +124,14 @@ export default function CreatePage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (regenerateCooldown <= 0) return
+    const timer = setInterval(() => {
+      setRegenerateCooldown((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [regenerateCooldown])
 
   const stopAudio = () => {
     if (!audioRef.current) return
@@ -172,14 +170,6 @@ export default function CreatePage() {
     setAudioPreviewScriptSnapshot('')
   }
 
-  const updateScript = (script: string) => {
-    setForm((prev) => ({ ...prev, script }))
-    stopAudio()
-    setAudioError('')
-    setAudioPreviewDataUrl('')
-    setAudioPreviewScriptSnapshot('')
-  }
-
   const canContinue = () => {
     if (step === 0) return Boolean(form.characterId)
     if (step === 1) return Boolean(form.contentType)
@@ -206,7 +196,7 @@ export default function CreatePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          senderName: form.senderName || session?.user?.name || 'Someone',
+          senderName: form.senderName || 'Someone',
           valentineName: form.valentineName || 'your valentine',
           contentType: form.contentType,
           personalTouch: form.personalTouch,
@@ -246,6 +236,12 @@ export default function CreatePage() {
         await generateScript()
       }
     }
+  }
+
+  const handleRegenerate = async () => {
+    if (isGeneratingScript || regenerateCooldown > 0) return
+    setRegenerateCooldown(REGENERATE_COOLDOWN_SECONDS)
+    await generateScript()
   }
 
   const handleAudioPreview = async () => {
@@ -312,8 +308,8 @@ export default function CreatePage() {
       return
     }
 
-    if (!form.senderName.trim() || !form.valentineName.trim() || !form.valentinePhone.trim()) {
-      setError('Fill in your name, their name, and their phone number.')
+    if (!form.senderName.trim() || !form.senderEmail.trim() || !form.valentineName.trim() || !form.valentinePhone.trim()) {
+      setError('Fill in your name, email, their name, and their phone number.')
       return
     }
 
@@ -332,6 +328,7 @@ export default function CreatePage() {
         body: JSON.stringify({
           phone: form.valentinePhone.trim(),
           senderName: form.senderName.trim(),
+          senderEmail: form.senderEmail.trim(),
           valentineName: form.valentineName.trim(),
           script: form.script.trim(),
           characterId: character.id,
@@ -365,23 +362,6 @@ export default function CreatePage() {
       setError(err.message || 'Could not place the call.')
       setIsSending(false)
     }
-  }
-
-  if (status === 'loading' || status === 'unauthenticated') {
-    return (
-      <main className="min-h-screen px-6 py-16">
-        <div className="wizard-shell surface-card text-center">
-          <img
-            src="/loader.png"
-            alt="Loading"
-            className="loader-float mx-auto h-16 w-16 object-contain"
-            loading="eager"
-            decoding="async"
-          />
-          <p className="mt-3 text-muted">Loading...</p>
-        </div>
-      </main>
-    )
   }
 
   return (
@@ -502,16 +482,38 @@ export default function CreatePage() {
                   ) : (
                     <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.8fr_1fr]">
                       <div className="space-y-4">
+                        {form.characterId && (
+                          <div className="rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-3">
+                            <img
+                              src={CHARACTER_MENU_IMAGE[form.characterId].src}
+                              alt={CHARACTER_MENU_IMAGE[form.characterId].alt}
+                              className="mx-auto h-auto w-full max-w-[260px] rounded-[10px]"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={handleRegenerate}
+                            disabled={isGeneratingScript || regenerateCooldown > 0}
+                            className="btn-secondary min-w-[190px]"
+                          >
+                            {isGeneratingScript
+                              ? 'Loading...'
+                              : regenerateCooldown > 0
+                                ? `Re-generate (${regenerateCooldown}s)`
+                                : 'Re-generate'}
+                          </button>
+                        </div>
                         <div>
                           <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                            Editable Script
+                            Script Preview
                           </label>
-                          <textarea
-                            className="input-cupid min-h-[520px]"
-                            value={form.script}
-                            onChange={(e) => updateScript(e.target.value)}
-                            placeholder="Your generated script appears here."
-                          />
+                          <div className="min-h-[520px] rounded-[10px] border border-[var(--surface-border)] bg-[rgba(255,255,255,0.015)] px-4 py-4">
+                            <p className="whitespace-pre-wrap text-[14px] leading-[1.75] text-primary">
+                              {form.script || 'Your generated script appears here.'}
+                            </p>
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap gap-3">
@@ -541,6 +543,19 @@ export default function CreatePage() {
                             placeholder="Your name"
                           />
                         </div>
+                        <div>
+                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your email</label>
+                          <input
+                            type="email"
+                            className="input-cupid"
+                            value={form.senderEmail}
+                            onChange={(e) => setForm((prev) => ({ ...prev, senderEmail: e.target.value }))}
+                            placeholder="you@example.com"
+                          />
+                        </div>
+                        <p className="text-[12px] leading-[1.6] text-muted">
+                          We won&apos;t show this to your valentine. It&apos;s used for credit tracking and fraud controls.
+                        </p>
                         <div>
                           <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Their name</label>
                           <input
