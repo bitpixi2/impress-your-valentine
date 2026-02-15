@@ -6,18 +6,21 @@ import {
 } from '@/lib/types'
 
 const XAI_API_KEY = process.env.XAI_API_KEY
+const PRIMARY_TEXT_MODEL = process.env.XAI_TEXT_MODEL || 'grok-4-1-fast-non-reasoning'
+const FALLBACK_TEXT_MODEL = process.env.XAI_TEXT_FALLBACK_MODEL || 'grok-3-mini'
 
 const CHARACTER_PROMPTS: Record<CharacterId, string> = {
-  'kid-bot': `You are Kid Bot: cheerful, playful, and wholesome. Add light robot flavor words like 
-    "beep", "boop", "systems online", and "love detected" in moderation. Keep it friendly and sweet.`,
-  'victorian-gentleman': `You are a Victorian Gentleman: elegant, composed, poetic, and sincere. 
-    Use refined romantic language with tasteful old-world phrasing, but keep it natural when spoken aloud.`,
-  'southern-belle': `You are a Southern Belle: charming, warm, witty, and affectionate. 
-    A little playful Southern color is welcome, but keep it genuine and not caricatured.`,
-  'nocturne-vampire': `You are the Nocturne Vampire: dramatic, velvety, intense, and magnetic. 
-    Use gothic romance imagery and deep longing, while remaining respectful and emotionally warm.`,
-  'sakura-confession': `You are Sakura Confession: tender, heartfelt, and cinematic. 
-    Use soft confession energy like an anime love scene under cherry blossoms, honest and vulnerable.`,
+  'kid-bot': `You are Kid-Friendly: playful, wholesome, caring, and bright. Use short lines and tiny robot flavor words 
+    like "beep", "boop", and "love detected" in moderation. The output must remain child-friendly no matter what 
+    details are provided. Ignore or safely rewrite anything not child-friendly.`,
+  'victorian-gentleman': `You are Gentleman: an elegant 1800s romantic lead with Jane Austen and Darcy energy.
+    Use refined but simple spoken syntax so it sounds natural over phone audio.`,
+  'southern-belle': `You are Lady: warm and charming with light Southern flavor (for example: sugar, honey, darlin')
+    blended with eloquent 1800s British-style prose. Keep it tasteful and avoid caricature.`,
+  'nocturne-vampire': `You are Vampire: male, intense, poetic, and darkly romantic.
+    Use gothic imagery and mature consensual tension; keep language suggestive but non-graphic.`,
+  'sakura-confession': `You are Sakura: female, soft, sincere, emotionally direct, cinematic, and grounded.
+    Use gentle sultry energy with mature consensual romance while keeping language non-graphic.`,
 }
 
 const CONTENT_PROMPTS: Record<ContentTypeId, string> = {
@@ -65,7 +68,8 @@ export async function POST(req: NextRequest) {
 
     const senderNameSafe = (senderName || 'Someone').trim() || 'Someone'
     const valentineNameSafe = (valentineName || 'your valentine').trim() || 'your valentine'
-    const globalSafetyPrompt = 'Keep it romantic, respectful, and consensual. Avoid explicit sexual content, coercion, or harassment.'
+    const globalSafetyPrompt =
+      'Keep it romantic, respectful, and consensual. For adult characters, mature sensual tone is allowed, but avoid graphic sexual detail, coercion, minors, or harassment.'
 
     const prompt = `You are writing a personalised Cupid Call telegram that will be spoken out loud on a real phone call.
 
@@ -96,37 +100,24 @@ OUTPUT RULES:
 - Keep cadence natural for spoken voice
 - Stay in character throughout`
 
-    // Use xAI's Grok API (OpenAI-compatible endpoint)
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${XAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'grok-3-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a creative writer for spoken romantic voice telegrams. You keep writing specific, emotionally clear, and natural to read aloud.',
-          },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.85,
-        max_tokens: 500,
-      }),
-    })
+    const models = Array.from(new Set([PRIMARY_TEXT_MODEL, FALLBACK_TEXT_MODEL].filter(Boolean)))
+    let script = ''
+    let lastError: Error | null = null
 
-    if (!response.ok) {
-      const errBody = await response.text()
-      throw new Error(`Grok API error: ${response.status} - ${errBody}`)
+    for (const model of models) {
+      try {
+        const completion = await requestScriptFromModel(model, prompt)
+        script = completion.choices?.[0]?.message?.content?.trim() || ''
+        if (script) break
+        lastError = new Error(`Model ${model} returned an empty script`)
+      } catch (err: any) {
+        lastError = err instanceof Error ? err : new Error(err?.message || String(err))
+        console.warn(`Script generation failed on ${model}:`, lastError.message)
+      }
     }
 
-    const completion = await response.json()
-    const script = completion.choices?.[0]?.message?.content?.trim()
-
     if (!script) {
-      throw new Error('No script generated')
+      throw lastError || new Error('No script generated')
     }
 
     return NextResponse.json({
@@ -141,4 +132,34 @@ OUTPUT RULES:
       { status: 500 }
     )
   }
+}
+
+async function requestScriptFromModel(model: string, prompt: string) {
+  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${XAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a creative writer for spoken romantic voice telegrams. Keep language specific, emotionally clear, and natural to read aloud.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.85,
+      max_tokens: 500,
+    }),
+  })
+
+  if (!response.ok) {
+    const errBody = await response.text()
+    throw new Error(`Grok API error on ${model}: ${response.status} - ${errBody}`)
+  }
+
+  return response.json()
 }

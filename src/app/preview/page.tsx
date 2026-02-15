@@ -37,7 +37,6 @@ export default function PreviewPage() {
           valentineName: callData.valentineName,
           script: callData.script,
           characterId: callData.characterId,
-          senderAgeBand: callData.senderAgeBand,
           voiceId: callData.voiceId,
         }),
       })

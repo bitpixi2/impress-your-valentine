@@ -40,6 +40,8 @@ const PRE_CALL_SMS_BODY = '💘 A Cupid Call is on its way. You might want to pi
 const POST_CALL_SMS_BODY = '💘 Enjoyed Cupid Call? Send one 1 free with code LOVE at https://cupidcall.bitpixi.com. Reply STOP to opt out.'
 const PREVIEW_AUDIO_SAMPLE_RATE = parsePositiveInt(process.env.PREVIEW_AUDIO_SAMPLE_RATE, 24000)
 const PREVIEW_AUDIO_TIMEOUT_MS = parsePositiveInt(process.env.PREVIEW_AUDIO_TIMEOUT_MS, 22000)
+const PRIMARY_REALTIME_MODEL = process.env.XAI_REALTIME_MODEL || 'grok-4-1-fast-non-reasoning'
+const FALLBACK_REALTIME_MODEL = process.env.XAI_REALTIME_FALLBACK_MODEL || 'grok-3-mini'
 
 const fastify = Fastify({ logger: true })
 fastify.register(fastifyWebsocket)
@@ -75,6 +77,15 @@ function callStartDelayMs(): number {
   return PRE_CALL_SMS_LEAD_MINUTES * 60 * 1000
 }
 
+function getRealtimeModelOrder(): string[] {
+  return Array.from(new Set([PRIMARY_REALTIME_MODEL, FALLBACK_REALTIME_MODEL].filter(Boolean)))
+}
+
+function buildRealtimeUrl(model: string): string {
+  const qp = new URLSearchParams({ model })
+  return `wss://api.x.ai/v1/realtime?${qp.toString()}`
+}
+
 function pcm16ToWav(pcmData: Buffer, sampleRate: number): Buffer {
   const channels = 1
   const bitsPerSample = 16
@@ -100,14 +111,30 @@ function pcm16ToWav(pcmData: Buffer, sampleRate: number): Buffer {
   return wav
 }
 
-function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer> {
+async function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer> {
+  const models = getRealtimeModelOrder()
+  let lastError: Error | null = null
+
+  for (const model of models) {
+    try {
+      return await synthesizePreviewAudioForModel(script, voiceId, model)
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(err?.message || String(err))
+      fastify.log.warn({ model, err: lastError.message }, 'Preview audio model attempt failed')
+    }
+  }
+
+  throw lastError || new Error('All preview audio model attempts failed')
+}
+
+function synthesizePreviewAudioForModel(script: string, voiceId: string, model: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     if (!XAI_API_KEY) {
       reject(new Error('XAI_API_KEY is not configured'))
       return
     }
 
-    const ws = new WebSocket('wss://api.x.ai/v1/realtime', {
+    const ws = new WebSocket(buildRealtimeUrl(model), {
       headers: { Authorization: `Bearer ${XAI_API_KEY}` },
     })
 
@@ -154,7 +181,10 @@ function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer
     }
 
     ws.on('open', () => {
-      timeoutHandle = setTimeout(() => finalize(new Error('Preview audio timed out')), PREVIEW_AUDIO_TIMEOUT_MS)
+      timeoutHandle = setTimeout(
+        () => finalize(new Error(`Preview audio timed out on ${model}`)),
+        PREVIEW_AUDIO_TIMEOUT_MS
+      )
 
       ws.send(JSON.stringify({
         type: 'session.update',
@@ -204,7 +234,7 @@ function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer
         }
 
         if (data.type === 'error') {
-          finalize(new Error(data.error?.message || 'Grok realtime preview failed'))
+          finalize(new Error(data.error?.message || `Grok realtime preview failed on ${model}`))
         }
       } catch (err: any) {
         finalize(new Error(err.message || 'Failed to parse Grok preview message'))
@@ -212,20 +242,24 @@ function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer
     })
 
     ws.on('error', (err: any) => {
-      finalize(new Error(err?.message || 'Grok preview websocket error'))
+      finalize(new Error(`Grok preview websocket error on ${model}: ${err?.message || 'unknown error'}`))
     })
 
     ws.on('close', () => {
       if (!settled) {
         if (receivedAudio) finalize()
-        else finalize(new Error('Grok preview websocket closed before audio response'))
+        else finalize(new Error(`Grok preview websocket closed before audio response on ${model}`))
       }
     })
   })
 }
 
 // ===== Health check =====
-fastify.get('/', async () => ({ status: 'Cupid Call Bridge Server 💘', voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo'] }))
+fastify.get('/', async () => ({
+  status: 'Cupid Call Bridge Server 💘',
+  voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo'],
+  realtimeModels: getRealtimeModelOrder(),
+}))
 
 // ===== Script audio preview (Grok voice) =====
 fastify.post('/preview-audio', async (request, reply) => {
@@ -498,87 +532,122 @@ fastify.register(async (app) => {
 
     function connectToGrok(twilioConn: any, callConfig: CallConfig, sid: string) {
       const systemPrompt = buildSystemPrompt(callConfig)
+      const models = getRealtimeModelOrder()
 
-      grokWs = new WebSocket('wss://api.x.ai/v1/realtime', {
-        headers: {
-          'Authorization': `Bearer ${XAI_API_KEY}`,
-        },
-      })
+      const connectWithModel = (index: number) => {
+        const model = models[index]
+        let opened = false
+        let switched = false
 
-      grokWs.on('open', () => {
-        fastify.log.info('Connected to Grok Voice Agent')
-
-        // Configure the session
-        const sessionConfig = {
-          type: 'session.update',
-          session: {
-            voice: callConfig.voiceId,
-            instructions: systemPrompt,
-            input_audio_format: 'g711_ulaw',
-            output_audio_format: 'g711_ulaw',
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500,
-            },
+        const ws = new WebSocket(buildRealtimeUrl(model), {
+          headers: {
+            Authorization: `Bearer ${XAI_API_KEY}`,
           },
+        })
+        grokWs = ws
+
+        const tryFallback = (reason: string, err?: any) => {
+          if (opened || switched) return
+          switched = true
+
+          if (index < models.length - 1) {
+            fastify.log.warn(
+              { model, reason, err: err?.message || err, fallbackModel: models[index + 1] },
+              'Realtime connection failed, retrying with fallback model'
+            )
+            connectWithModel(index + 1)
+            return
+          }
+
+          fastify.log.error(
+            { model, reason, err: err?.message || err },
+            'Realtime connection failed for all configured models'
+          )
         }
-        grokWs!.send(JSON.stringify(sessionConfig))
 
-        // Trigger Grok to start speaking the telegram
-        setTimeout(() => {
-          grokWs!.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'user',
-              content: [
-                {
-                  type: 'input_text',
-                  text: 'The call has connected. Please deliver the love telegram now.',
-                },
-              ],
+        ws.on('open', () => {
+          opened = true
+          fastify.log.info({ model }, 'Connected to Grok Voice Agent')
+
+          // Configure the session
+          const sessionConfig = {
+            type: 'session.update',
+            session: {
+              voice: callConfig.voiceId,
+              instructions: systemPrompt,
+              input_audio_format: 'g711_ulaw',
+              output_audio_format: 'g711_ulaw',
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500,
+              },
             },
-          }))
-          grokWs!.send(JSON.stringify({ type: 'response.create' }))
-        }, 500)
-      })
+          }
+          ws.send(JSON.stringify(sessionConfig))
 
-      grokWs.on('message', (message: any) => {
-        try {
-          const data = JSON.parse(message.toString())
-
-          // Forward Grok's audio back to Twilio
-          if (data.type === 'response.audio.delta' && data.delta) {
-            twilioConn.send(JSON.stringify({
-              event: 'media',
-              streamSid: sid,
-              media: {
-                payload: data.delta, // Base64 μ-law audio
+          // Trigger Grok to start speaking the telegram
+          setTimeout(() => {
+            if (ws.readyState !== WebSocket.OPEN) return
+            ws.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [
+                  {
+                    type: 'input_text',
+                    text: 'The call has connected. Please deliver the love telegram now.',
+                  },
+                ],
               },
             }))
-          }
+            ws.send(JSON.stringify({ type: 'response.create' }))
+          }, 500)
+        })
 
-          // Log interesting events
-          if (data.type === 'response.audio_transcript.delta') {
-            // Grok is speaking — transcript available
-          }
-          if (data.type === 'error') {
-            fastify.log.error('Grok error:', data.error)
-          }
-        } catch (err) {
-          fastify.log.error('Error processing Grok message:', err)
-        }
-      })
+        ws.on('message', (message: any) => {
+          try {
+            const data = JSON.parse(message.toString())
 
-      grokWs.on('error', (err) => {
-        fastify.log.error('Grok WebSocket error:', err)
-      })
+            // Forward Grok's audio back to Twilio
+            if (data.type === 'response.audio.delta' && data.delta) {
+              twilioConn.send(JSON.stringify({
+                event: 'media',
+                streamSid: sid,
+                media: {
+                  payload: data.delta, // Base64 μ-law audio
+                },
+              }))
+            }
 
-      grokWs.on('close', () => {
-        fastify.log.info('Grok WebSocket closed')
-      })
+            if (data.type === 'error') {
+              fastify.log.error({ model, error: data.error }, 'Grok error')
+            }
+          } catch (err) {
+            fastify.log.error({ model, err }, 'Error processing Grok message')
+          }
+        })
+
+        ws.on('error', (err) => {
+          if (!opened) {
+            tryFallback('websocket-error-before-open', err)
+            return
+          }
+          fastify.log.error({ model, err }, 'Grok WebSocket error')
+        })
+
+        ws.on('close', () => {
+          if (!opened) {
+            tryFallback('websocket-closed-before-open')
+            return
+          }
+          fastify.log.info({ model }, 'Grok WebSocket closed')
+        })
+      }
+
+      connectWithModel(0)
     }
   })
 })
@@ -588,15 +657,15 @@ function buildSystemPrompt(config: CallConfig): string {
   const { senderName, valentineName, script, characterId } = config
 
   const CHARACTER_DELIVERY_PROMPTS: Record<string, string> = {
-    'kid-bot': 'Playful, friendly robot delivery. Cheerful and wholesome.',
-    'victorian-gentleman': 'Elegant and poetic delivery. Warm gentleman tone.',
-    'southern-belle': 'Honey-sweet charm with graceful playful warmth.',
-    'nocturne-vampire': 'Dramatic gothic romance, velvety and intense but respectful.',
-    'sakura-confession': 'Soft, intimate confession energy with tender warmth.',
+    'kid-bot': 'Kid-Friendly: playful, wholesome, and caring with tiny robot flavor words.',
+    'victorian-gentleman': 'Gentleman: Darcy-style 1800s elegance with simpler spoken phrasing.',
+    'southern-belle': 'Lady: warm charm with light Southern words and old-world eloquence, never caricatured.',
+    'nocturne-vampire': 'Vampire: male, intense, poetic, mature, and consensual with non-graphic sensuality.',
+    'sakura-confession': 'Sakura: female, soft, sincere, cinematic, emotionally direct, and mature with non-graphic sensuality.',
   }
 
   const characterNote = CHARACTER_DELIVERY_PROMPTS[characterId] || 'Warm romantic delivery.'
-  const safetyNote = 'Keep the delivery romantic, respectful, and consensual. Avoid explicit sexual details.'
+  const safetyNote = 'Keep the delivery consensual and respectful. Mature sensual tone is allowed for 18+ personas, but avoid graphic sexual detail, coercion, and minors.'
 
   return `You are a Cupid Call love telegram delivery agent. You are calling ${valentineName} 
 on behalf of ${senderName} as part of the Sophiie AI Hackathon Valentine's Day experience.

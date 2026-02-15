@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { phone, senderName, valentineName, script, characterId, senderAgeBand } = await req.json()
+    const { phone, senderName, valentineName, script, characterId } = await req.json()
 
     if (!phone || !senderName || !script || !characterId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
         valentineName,
         script,
         characterId: character.id,
-        senderAgeBand: senderAgeBand || '18_plus',
         voiceId: character.voiceId,
         callId: `cupid-${userId}-${Date.now()}`,
       }),

@@ -36,28 +36,28 @@ const INITIAL_FORM: FormData = {
   voiceId: '',
 }
 
-const STEP_TITLES = ['Pick Your Character', 'Add Details', 'Preview + Send']
+const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview + Send']
 
 const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = {
   'kid-bot': {
     src: '/menu1-kidfriendly.png',
-    alt: 'Kid Bot character selection',
+    alt: 'Kid-Friendly character selection',
   },
   'southern-belle': {
     src: '/menu2-lady.png',
-    alt: 'Southern Belle character selection',
+    alt: 'Lady character selection',
   },
   'victorian-gentleman': {
     src: '/menu3-gentleman.png',
-    alt: 'Victorian Gentleman character selection',
+    alt: 'Gentleman character selection',
   },
   'sakura-confession': {
     src: '/menu4-sakura.png',
-    alt: 'Sakura Confession character selection',
+    alt: 'Sakura character selection',
   },
   'nocturne-vampire': {
     src: '/menu5-vampire.png',
-    alt: 'Nocturne Vampire character selection',
+    alt: 'Vampire character selection',
   },
 }
 
@@ -83,6 +83,7 @@ export default function CreatePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const totalSteps = 3
+  const shellClass = 'mx-auto w-full max-w-[1320px]'
   const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
   const personalTouchChars = form.personalTouch.length
 
@@ -370,7 +371,14 @@ export default function CreatePage() {
     return (
       <main className="min-h-screen px-6 py-16">
         <div className="wizard-shell surface-card text-center">
-          <p className="text-muted">Loading your workspace…</p>
+          <img
+            src="/loader.png"
+            alt="Loading"
+            className="loader-float mx-auto h-16 w-16 object-contain"
+            loading="eager"
+            decoding="async"
+          />
+          <p className="mt-3 text-muted">Loading...</p>
         </div>
       </main>
     )
@@ -378,7 +386,7 @@ export default function CreatePage() {
 
   return (
     <main className="relative min-h-screen pb-16">
-      <nav className="wizard-shell flex items-center justify-between px-6 py-8">
+      <nav className={`${shellClass} flex items-center justify-between px-6 py-8`}>
         <a href="/" className="text-[14px] uppercase tracking-[0.14em] text-muted">
           Cupid Call
         </a>
@@ -387,11 +395,11 @@ export default function CreatePage() {
         </div>
       </nav>
 
-      <section className="wizard-shell px-6">
+      <section className={`${shellClass} px-6`}>
         <CreditBar credits={credits} hasUsedLoveCode={hasUsedLoveCode} onCreditsUpdated={loadCredits} />
       </section>
 
-      <section className="wizard-shell px-6 pb-12 pt-6">
+      <section className={`${shellClass} px-6 pb-12 pt-6`}>
         <div className="mb-6 flex justify-center gap-2">
           {Array.from({ length: totalSteps }, (_, i) => (
             <div key={i} className={`step-dot ${i === step ? 'active' : i < step ? 'completed' : 'pending'}`} />
@@ -413,7 +421,7 @@ export default function CreatePage() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="text-center font-display text-[44px] italic leading-[1.08] tracking-[0.04em] text-primary md:text-[54px]">
+              <h1 className="text-center font-display text-[52px] italic leading-[1.06] tracking-[0.04em] text-primary md:text-[64px]">
                 {STEP_TITLES[step]}
               </h1>
 
@@ -482,18 +490,24 @@ export default function CreatePage() {
                 <div className="mt-8">
                   {isGeneratingScript && !form.script ? (
                     <div className="rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-6 py-12 text-center">
-                      <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-[var(--surface-border)] border-t-[var(--accent-rose)]" />
-                      <p className="text-[14px] text-muted">Grok is generating your script…</p>
+                      <img
+                        src="/loader.png"
+                        alt="Loading"
+                        className="loader-float mx-auto h-20 w-20 object-contain"
+                        loading="eager"
+                        decoding="async"
+                      />
+                      <p className="mt-3 text-[14px] text-muted">Loading...</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_1fr]">
+                    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.8fr_1fr]">
                       <div className="space-y-4">
                         <div>
                           <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
                             Editable Script
                           </label>
                           <textarea
-                            className="input-cupid min-h-[360px]"
+                            className="input-cupid min-h-[520px]"
                             value={form.script}
                             onChange={(e) => updateScript(e.target.value)}
                             placeholder="Your generated script appears here."
@@ -507,23 +521,16 @@ export default function CreatePage() {
                             className="btn-secondary min-w-[190px]"
                           >
                             {isLoadingAudio
-                              ? 'Generating Audio…'
+                              ? 'Loading...'
                               : isPlayingAudio
                                 ? 'Pause Audio Preview'
                                 : 'Audio Preview'}
-                          </button>
-                          <button
-                            onClick={generateScript}
-                            disabled={isGeneratingScript}
-                            className="btn-secondary min-w-[170px]"
-                          >
-                            {isGeneratingScript ? 'Regenerating…' : 'Regenerate Script'}
                           </button>
                         </div>
                         {audioError && <p className="text-[12px] text-[var(--age-red)]">{audioError}</p>}
                       </div>
 
-                      <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-4">
+                      <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-6">
                         <div>
                           <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
                           <input

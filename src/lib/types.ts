@@ -1,4 +1,3 @@
-export type AgeBand = 'under_16' | '16_plus' | '18_plus'
 export type CharacterId =
   | 'kid-bot'
   | 'victorian-gentleman'
@@ -17,7 +16,6 @@ export interface CupidCallFormData {
   senderName: string
   valentineName: string
   valentinePhone: string
-  senderAgeBand: AgeBand
   contentType: ContentTypeId
   personalTouch: string
   characterId: CharacterId
@@ -46,27 +44,17 @@ export interface CreditPurchase {
 
 export interface CharacterOption {
   id: CharacterId
-  emoji: string
   name: string
   desc: string
   sample: string
-  ageGateLabel: 'ALL AGES' | '16+' | '18+'
-  minAgeBand: AgeBand
   voiceId: GrokVoiceId
 }
 
 export interface ContentTypeOption {
   id: ContentTypeId
-  emoji: string
   name: string
   desc: string
 }
-
-export const AGE_OPTIONS: Array<{ id: AgeBand; label: string; desc: string }> = [
-  { id: 'under_16', label: 'Under 16', desc: 'Kid Bot only' },
-  { id: '16_plus', label: '16+', desc: 'Unlocks Gentleman and Southern Belle' },
-  { id: '18_plus', label: '18+', desc: 'Unlocks Vampire and Sakura as well' },
-]
 
 // Grok Voice Agent voices — 5 built-in options
 export const GROK_VOICES: Array<{
@@ -74,65 +62,49 @@ export const GROK_VOICES: Array<{
   name: string
   desc: string
   gender: string
-  emoji: string
   tone: string
 }> = [
-  { id: 'Ara', name: 'Ara', desc: 'Warm & friendly narrator', gender: 'Female', emoji: '🌹', tone: 'Warm, melodic' },
-  { id: 'Rex', name: 'Rex', desc: 'Confident and polished', gender: 'Male', emoji: '🎩', tone: 'Confident, clear' },
-  { id: 'Sal', name: 'Sal', desc: 'Balanced and versatile', gender: 'Neutral', emoji: '✨', tone: 'Smooth, balanced' },
-  { id: 'Eve', name: 'Eve', desc: 'Playful and energetic', gender: 'Female', emoji: '🤖', tone: 'Energetic, upbeat' },
-  { id: 'Leo', name: 'Leo', desc: 'Strong and dramatic', gender: 'Male', emoji: '🧛', tone: 'Commanding, intense' },
+  { id: 'Ara', name: 'Ara', desc: 'Warm & friendly narrator', gender: 'Female', tone: 'Warm, melodic' },
+  { id: 'Rex', name: 'Rex', desc: 'Confident and polished', gender: 'Male', tone: 'Confident, clear' },
+  { id: 'Sal', name: 'Sal', desc: 'Balanced and versatile', gender: 'Neutral', tone: 'Smooth, balanced' },
+  { id: 'Eve', name: 'Eve', desc: 'Playful and energetic', gender: 'Female', tone: 'Energetic, upbeat' },
+  { id: 'Leo', name: 'Leo', desc: 'Strong and dramatic', gender: 'Male', tone: 'Commanding, intense' },
 ]
 
 export const CHARACTER_OPTIONS: CharacterOption[] = [
   {
     id: 'kid-bot',
-    emoji: '🤖',
-    name: 'Kid Bot',
-    desc: 'Friendly robot with cheerful beeps and wholesome fun.',
-    sample: '"Beep boop. Love detected. Smiles activated."',
-    ageGateLabel: 'ALL AGES',
-    minAgeBand: 'under_16',
+    name: 'Kid-Friendly',
+    desc: 'Playful and wholesome with short bright lines and tiny robot flavor words.',
+    sample: '"Beep boop. Kindness activated. Love detected."',
     voiceId: 'Eve',
   },
   {
     id: 'victorian-gentleman',
-    emoji: '🎩',
-    name: 'Victorian Gentleman',
-    desc: 'Elegant, poetic, and deeply sincere Mr. Darcy energy.',
+    name: 'Gentleman',
+    desc: 'Elegant Jane Austen Darcy style with simpler spoken syntax for phone.',
     sample: '"My dearest, if I may be so bold..."',
-    ageGateLabel: '16+',
-    minAgeBand: '16_plus',
     voiceId: 'Rex',
   },
   {
     id: 'southern-belle',
-    emoji: '🌸',
-    name: 'Southern Belle',
-    desc: 'Honey-sweet charm, playful warmth, and old-soul romance.',
-    sample: '"Well I do declare, sugar..."',
-    ageGateLabel: '16+',
-    minAgeBand: '16_plus',
+    name: 'Lady',
+    desc: 'Warm and charming, light Southern flavor with eloquent old-world prose.',
+    sample: '"Darlin\', you are the finest chapter in my story, honey."',
     voiceId: 'Ara',
   },
   {
     id: 'nocturne-vampire',
-    emoji: '🧛',
-    name: 'Nocturne Vampire',
-    desc: 'Dark, smouldering gothic romance with dramatic intensity.',
+    name: 'Vampire',
+    desc: 'Intense poetic gothic romance with mature, consensual sensual tension.',
     sample: '"Centuries of darkness... and then you."',
-    ageGateLabel: '18+',
-    minAgeBand: '18_plus',
     voiceId: 'Leo',
   },
   {
     id: 'sakura-confession',
-    emoji: '🌸',
-    name: 'Sakura Confession',
-    desc: 'Tender anime-style confession beneath falling cherry blossoms.',
+    name: 'Sakura',
+    desc: 'Soft, sincere, emotionally direct, cinematic, grounded, and mature.',
     sample: '"I have wanted to tell you this for so long..."',
-    ageGateLabel: '18+',
-    minAgeBand: '18_plus',
     voiceId: 'Ara',
   },
 ]
@@ -140,54 +112,32 @@ export const CHARACTER_OPTIONS: CharacterOption[] = [
 export const CONTENT_TYPES: ContentTypeOption[] = [
   {
     id: 'love-poem',
-    emoji: '📝',
     name: 'Love Poem',
     desc: 'A lyrical love letter with rhythm and imagery.',
   },
   {
     id: 'miss-you',
-    emoji: '🌙',
     name: 'Miss You',
     desc: 'For distance, longing, and heartfelt reunion energy.',
   },
   {
     id: 'always-wanted-to-say',
-    emoji: '💬',
     name: 'Always Wanted to Say',
     desc: 'Honest feelings you have been holding back.',
   },
   {
     id: 'hype-up',
-    emoji: '🚀',
     name: 'Hype Up',
     desc: 'Lift them up and make them feel unstoppable.',
   },
   {
     id: 'apology',
-    emoji: '🕊️',
     name: 'Apology',
     desc: 'Sincere ownership, repair, and commitment.',
   },
 ]
 
-const AGE_RANK: Record<AgeBand, number> = {
-  under_16: 0,
-  '16_plus': 1,
-  '18_plus': 2,
-}
-
 export function getCharacterById(characterId: string | undefined) {
   if (!characterId) return null
   return CHARACTER_OPTIONS.find((character) => character.id === characterId) || null
-}
-
-export function isCharacterAvailableForAge(characterId: string, ageBand: AgeBand) {
-  const character = getCharacterById(characterId)
-  if (!character) return false
-  return AGE_RANK[ageBand] >= AGE_RANK[character.minAgeBand]
-}
-
-export function getAvailableCharacters(ageBand: AgeBand | '') {
-  if (!ageBand) return CHARACTER_OPTIONS
-  return CHARACTER_OPTIONS.filter((character) => AGE_RANK[ageBand] >= AGE_RANK[character.minAgeBand])
 }

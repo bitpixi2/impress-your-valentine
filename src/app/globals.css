@@ -268,11 +268,6 @@ body {
   padding: 18px;
 }
 
-.character-card .emoji {
-  font-size: 52px;
-  line-height: 1;
-}
-
 .character-card .title {
   font-family: 'Cormorant Garamond', serif;
   font-style: italic;
@@ -341,6 +336,23 @@ body {
   border-top: 1px solid var(--surface-border);
   background: rgba(17, 13, 21, 0.74);
   backdrop-filter: blur(20px);
+}
+
+.loader-float {
+  animation: loader-float 3.8s ease-in-out infinite;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.12));
+}
+
+@keyframes loader-float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+  100% {
+    transform: translateY(0);
+  }
 }
 
 a,
