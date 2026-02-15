@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { useCredit, getOrCreateUser } from '@/lib/credits'
-import {
-  getCharacterById,
-  isCharacterAvailableForAge,
-  type AgeBand,
-} from '@/lib/types'
+import { getCharacterById } from '@/lib/types'
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:8081'
 export const dynamic = 'force-dynamic'
@@ -32,22 +28,13 @@ export async function POST(req: NextRequest) {
 
     const { phone, senderName, valentineName, script, characterId, senderAgeBand } = await req.json()
 
-    if (!phone || !senderName || !script || !characterId || !senderAgeBand) {
+    if (!phone || !senderName || !script || !characterId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    const validAgeBands: AgeBand[] = ['under_16', '16_plus', '18_plus']
-    if (!validAgeBands.includes(senderAgeBand)) {
-      return NextResponse.json({ error: 'Invalid age band selected' }, { status: 400 })
     }
 
     const character = getCharacterById(characterId)
     if (!character) {
       return NextResponse.json({ error: 'Invalid character selected' }, { status: 400 })
-    }
-
-    if (!isCharacterAvailableForAge(character.id, senderAgeBand as AgeBand)) {
-      return NextResponse.json({ error: 'Character not available for selected age band' }, { status: 400 })
     }
 
     // Call the bridge server which handles Twilio ↔ Grok Voice Agent
@@ -60,7 +47,7 @@ export async function POST(req: NextRequest) {
         valentineName,
         script,
         characterId: character.id,
-        senderAgeBand,
+        senderAgeBand: senderAgeBand || '18_plus',
         voiceId: character.voiceId,
         callId: `cupid-${userId}-${Date.now()}`,
       }),

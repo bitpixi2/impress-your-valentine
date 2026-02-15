@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   getCharacterById,
-  isCharacterAvailableForAge,
-  type AgeBand,
   type CharacterId,
   type ContentTypeId,
 } from '@/lib/types'
@@ -41,26 +39,18 @@ export async function POST(req: NextRequest) {
     const {
       senderName,
       valentineName,
-      senderAgeBand,
       personalTouch,
       customMessage,
       contentType,
       characterId,
     } = body
 
-    if (!senderName || !valentineName || !senderAgeBand || !contentType || !characterId || !personalTouch) {
+    if (!contentType || !characterId || !personalTouch) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
     }
-
-    const validAgeBands: AgeBand[] = ['under_16', '16_plus', '18_plus']
-    if (!validAgeBands.includes(senderAgeBand)) {
-      return NextResponse.json({ error: 'Invalid age band selected' }, { status: 400 })
-    }
-
-    const ageBand = senderAgeBand as AgeBand
     const character = getCharacterById(characterId)
     const contentPrompt = CONTENT_PROMPTS[contentType as ContentTypeId]
 
@@ -70,16 +60,13 @@ export async function POST(req: NextRequest) {
     if (!contentPrompt) {
       return NextResponse.json({ error: 'Invalid content type selected' }, { status: 400 })
     }
-    if (!isCharacterAvailableForAge(character.id, ageBand)) {
-      return NextResponse.json({ error: 'Selected character is not available for this age band' }, { status: 400 })
-    }
     if (personalTouch.length > 1000) {
       return NextResponse.json({ error: 'Personal touch must be 1000 characters or less' }, { status: 400 })
     }
 
-    const ageSafetyPrompt = ageBand === '18_plus'
-      ? `Audience is 18+. Mature romantic tone is acceptable, but avoid explicit sexual content, coercion, or harassment.`
-      : `Audience includes minors. Keep all language wholesome and PG. No sexual content, innuendo, or explicit references.`
+    const senderNameSafe = (senderName || 'Someone').trim() || 'Someone'
+    const valentineNameSafe = (valentineName || 'your valentine').trim() || 'your valentine'
+    const globalSafetyPrompt = 'Keep it romantic, respectful, and consensual. Avoid explicit sexual content, coercion, or harassment.'
 
     const customPrompt = customMessage?.trim()
       ? `CUSTOM CORE MESSAGE TO INCLUDE:\n${customMessage.trim()}`
@@ -94,10 +81,10 @@ CONTENT GOAL:
 ${contentPrompt}
 
 SENDER:
-${senderName}
+${senderNameSafe}
 
 RECIPIENT:
-${valentineName}
+${valentineNameSafe}
 
 PRIVATE CONTEXT TO WEAVE IN:
 ${personalTouch}
@@ -105,7 +92,7 @@ ${personalTouch}
 ${customPrompt}
 
 SAFETY POLICY:
-${ageSafetyPrompt}
+${globalSafetyPrompt}
 
 OUTPUT RULES:
 - 80-150 words total (about 30-60 seconds spoken)

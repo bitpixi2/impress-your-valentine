@@ -38,6 +38,8 @@ const POST_CALL_SMS_DELAY_MINUTES = parseMinutes(process.env.POST_CALL_SMS_DELAY
 const PENDING_CALL_TTL_MS = Math.max(PRE_CALL_SMS_LEAD_MINUTES + POST_CALL_SMS_DELAY_MINUTES + 15, 20) * 60 * 1000
 const PRE_CALL_SMS_BODY = '💘 A Cupid Call is on its way. You might want to pick up and hit record.'
 const POST_CALL_SMS_BODY = '💘 Enjoyed Cupid Call? Send one 1 free with code LOVE at https://cupidcall.bitpixi.com. Reply STOP to opt out.'
+const PREVIEW_AUDIO_SAMPLE_RATE = parsePositiveInt(process.env.PREVIEW_AUDIO_SAMPLE_RATE, 24000)
+const PREVIEW_AUDIO_TIMEOUT_MS = parsePositiveInt(process.env.PREVIEW_AUDIO_TIMEOUT_MS, 22000)
 
 const fastify = Fastify({ logger: true })
 fastify.register(fastifyWebsocket)
@@ -53,7 +55,6 @@ interface CallConfig {
   valentineName: string
   script: string
   characterId: string
-  senderAgeBand: string
   voiceId: string  // Ara, Rex, Sal, Eve, Leo
   createdAt: number
 }
@@ -64,12 +65,196 @@ function parseMinutes(value: string | undefined, fallback: number): number {
   return parsed
 }
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value || '', 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
 function callStartDelayMs(): number {
   return PRE_CALL_SMS_LEAD_MINUTES * 60 * 1000
 }
 
+function pcm16ToWav(pcmData: Buffer, sampleRate: number): Buffer {
+  const channels = 1
+  const bitsPerSample = 16
+  const byteRate = sampleRate * channels * (bitsPerSample / 8)
+  const blockAlign = channels * (bitsPerSample / 8)
+
+  const wav = Buffer.alloc(44 + pcmData.length)
+  wav.write('RIFF', 0)
+  wav.writeUInt32LE(36 + pcmData.length, 4)
+  wav.write('WAVE', 8)
+  wav.write('fmt ', 12)
+  wav.writeUInt32LE(16, 16) // PCM subchunk size
+  wav.writeUInt16LE(1, 20) // Audio format = PCM
+  wav.writeUInt16LE(channels, 22)
+  wav.writeUInt32LE(sampleRate, 24)
+  wav.writeUInt32LE(byteRate, 28)
+  wav.writeUInt16LE(blockAlign, 32)
+  wav.writeUInt16LE(bitsPerSample, 34)
+  wav.write('data', 36)
+  wav.writeUInt32LE(pcmData.length, 40)
+  pcmData.copy(wav, 44)
+
+  return wav
+}
+
+function synthesizePreviewAudio(script: string, voiceId: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    if (!XAI_API_KEY) {
+      reject(new Error('XAI_API_KEY is not configured'))
+      return
+    }
+
+    const ws = new WebSocket('wss://api.x.ai/v1/realtime', {
+      headers: { Authorization: `Bearer ${XAI_API_KEY}` },
+    })
+
+    const pcmChunks: Buffer[] = []
+    let settled = false
+    let receivedAudio = false
+    let timeoutHandle: NodeJS.Timeout | null = null
+    let idleHandle: NodeJS.Timeout | null = null
+
+    const clearTimers = () => {
+      if (timeoutHandle) clearTimeout(timeoutHandle)
+      if (idleHandle) clearTimeout(idleHandle)
+      timeoutHandle = null
+      idleHandle = null
+    }
+
+    const finalize = (err?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimers()
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+
+      if (err) {
+        reject(err)
+        return
+      }
+
+      if (!pcmChunks.length) {
+        reject(new Error('No audio generated for preview'))
+        return
+      }
+
+      const wav = pcm16ToWav(Buffer.concat(pcmChunks), PREVIEW_AUDIO_SAMPLE_RATE)
+      resolve(wav)
+    }
+
+    const refreshIdle = () => {
+      if (idleHandle) clearTimeout(idleHandle)
+      idleHandle = setTimeout(() => {
+        if (receivedAudio) finalize()
+      }, 900)
+    }
+
+    ws.on('open', () => {
+      timeoutHandle = setTimeout(() => finalize(new Error('Preview audio timed out')), PREVIEW_AUDIO_TIMEOUT_MS)
+
+      ws.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          voice: voiceId,
+          instructions: 'Read the user script in a warm, natural tone. Keep pacing clean and expressive.',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+        },
+      }))
+
+      ws.send(JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: `Read this exact script as a polished audio preview:\n\n${script}`,
+            },
+          ],
+        },
+      }))
+
+      ws.send(JSON.stringify({ type: 'response.create' }))
+    })
+
+    ws.on('message', (raw: any) => {
+      try {
+        const data = JSON.parse(raw.toString())
+
+        if (data.type === 'response.audio.delta' && data.delta) {
+          receivedAudio = true
+          pcmChunks.push(Buffer.from(data.delta, 'base64'))
+          refreshIdle()
+          return
+        }
+
+        if (
+          data.type === 'response.done' ||
+          data.type === 'response.completed' ||
+          data.type === 'response.output_audio.done'
+        ) {
+          finalize()
+          return
+        }
+
+        if (data.type === 'error') {
+          finalize(new Error(data.error?.message || 'Grok realtime preview failed'))
+        }
+      } catch (err: any) {
+        finalize(new Error(err.message || 'Failed to parse Grok preview message'))
+      }
+    })
+
+    ws.on('error', (err: any) => {
+      finalize(new Error(err?.message || 'Grok preview websocket error'))
+    })
+
+    ws.on('close', () => {
+      if (!settled) {
+        if (receivedAudio) finalize()
+        else finalize(new Error('Grok preview websocket closed before audio response'))
+      }
+    })
+  })
+}
+
 // ===== Health check =====
 fastify.get('/', async () => ({ status: 'Cupid Call Bridge Server 💘', voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo'] }))
+
+// ===== Script audio preview (Grok voice) =====
+fastify.post('/preview-audio', async (request, reply) => {
+  const { script, voiceId = 'Ara' } = request.body as any
+
+  if (!script || typeof script !== 'string') {
+    return reply.status(400).send({ error: 'Script is required' })
+  }
+
+  const text = script.trim()
+  if (!text) {
+    return reply.status(400).send({ error: 'Script is required' })
+  }
+  if (text.length > 3000) {
+    return reply.status(400).send({ error: 'Script exceeds preview limit' })
+  }
+
+  try {
+    const wav = await synthesizePreviewAudio(text, voiceId)
+    return {
+      audioBase64: wav.toString('base64'),
+      mimeType: 'audio/wav',
+      sampleRate: PREVIEW_AUDIO_SAMPLE_RATE,
+    }
+  } catch (err: any) {
+    fastify.log.error({ err }, 'Failed to generate preview audio')
+    return reply.status(500).send({ error: err.message || 'Preview audio generation failed' })
+  }
+})
 
 // ===== Outbound call trigger =====
 fastify.post('/outbound-call', async (request, reply) => {
@@ -79,12 +264,11 @@ fastify.post('/outbound-call', async (request, reply) => {
     valentineName,
     script,
     characterId = 'kid-bot',
-    senderAgeBand = 'under_16',
     voiceId = 'Ara',
     callId,
   } = request.body as any
 
-  if (!phone || !senderName || !script || !characterId || !senderAgeBand) {
+  if (!phone || !senderName || !script || !characterId) {
     return reply.status(400).send({ error: 'Missing required fields' })
   }
 
@@ -100,7 +284,6 @@ fastify.post('/outbound-call', async (request, reply) => {
     valentineName,
     script,
     characterId,
-    senderAgeBand,
     voiceId,
     createdAt: Date.now(),
   })
@@ -402,7 +585,7 @@ fastify.register(async (app) => {
 
 // ===== Build the system prompt for Grok =====
 function buildSystemPrompt(config: CallConfig): string {
-  const { senderName, valentineName, script, characterId, senderAgeBand } = config
+  const { senderName, valentineName, script, characterId } = config
 
   const CHARACTER_DELIVERY_PROMPTS: Record<string, string> = {
     'kid-bot': 'Playful, friendly robot delivery. Cheerful and wholesome.',
@@ -413,9 +596,7 @@ function buildSystemPrompt(config: CallConfig): string {
   }
 
   const characterNote = CHARACTER_DELIVERY_PROMPTS[characterId] || 'Warm romantic delivery.'
-  const ageSafety = senderAgeBand === '18_plus'
-    ? 'Audience is 18+, but avoid explicit sexual details. Keep it romantic and consensual.'
-    : 'Audience may include minors. Keep all content PG and wholesome.'
+  const safetyNote = 'Keep the delivery romantic, respectful, and consensual. Avoid explicit sexual details.'
 
   return `You are a Cupid Call love telegram delivery agent. You are calling ${valentineName} 
 on behalf of ${senderName} as part of the Sophiie AI Hackathon Valentine's Day experience.
@@ -434,7 +615,7 @@ ${script}
 6. If they don't respond or say goodbye, end warmly.
 
 CHARACTER MODE: ${characterNote}
-SAFETY: ${ageSafety}
+SAFETY: ${safetyNote}
 
 IMPORTANT:
 - You ARE the voice delivering this telegram — commit to the character

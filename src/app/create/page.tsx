@@ -1,68 +1,67 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSession, signIn } from 'next-auth/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import CreditBar from '@/components/CreditBar'
 import {
-  AGE_OPTIONS,
   CHARACTER_OPTIONS,
   CONTENT_TYPES,
   getCharacterById,
-  getAvailableCharacters,
-  isCharacterAvailableForAge,
-  type AgeBand,
   type CharacterId,
   type ContentTypeId,
+  type GrokVoiceId,
 } from '@/lib/types'
 
 interface FormData {
+  characterId: CharacterId | ''
+  contentType: ContentTypeId | ''
+  personalTouch: string
   senderName: string
   valentineName: string
   valentinePhone: string
-  senderAgeBand: AgeBand | ''
-  contentType: ContentTypeId | ''
-  personalTouch: string
-  customMessage: string
-  characterId: CharacterId | ''
+  script: string
+  voiceId: GrokVoiceId | ''
 }
 
 const INITIAL_FORM: FormData = {
+  characterId: '',
+  contentType: '',
+  personalTouch: '',
   senderName: '',
   valentineName: '',
   valentinePhone: '',
-  senderAgeBand: '',
-  contentType: '',
-  personalTouch: '',
-  customMessage: '',
-  characterId: '',
+  script: '',
+  voiceId: '',
 }
 
-const AGE_ACCENT: Record<AgeBand, string> = {
-  under_16: 'var(--age-green)',
-  '16_plus': 'var(--age-amber)',
-  '18_plus': 'var(--age-red)',
-}
+const STEP_TITLES = ['Pick Your Character', 'Add Details', 'Preview + Send']
 
 export default function CreatePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormData>(INITIAL_FORM)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
+  const [audioError, setAudioError] = useState('')
   const [credits, setCredits] = useState(0)
   const [hasUsedLoveCode, setHasUsedLoveCode] = useState(false)
   const [purchaseStatus, setPurchaseStatus] = useState('')
 
-  const totalSteps = 4
-  const stepTitles = [
-    'Sign In and Age Gate',
-    'Content Direction',
-    'Personal Detail',
-    'Character Selection',
-  ]
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [audioPreviewDataUrl, setAudioPreviewDataUrl] = useState('')
+  const [audioPreviewScriptSnapshot, setAudioPreviewScriptSnapshot] = useState('')
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const totalSteps = 3
+  const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
+  const personalTouchChars = form.personalTouch.length
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -78,7 +77,7 @@ export default function CreatePage() {
       setCredits(data.remainingCredits)
       setHasUsedLoveCode(data.hasUsedLoveCode)
     } catch {
-      // Ignore transient fetch issues in UI.
+      // Ignore transient fetch issues.
     }
   }
 
@@ -88,8 +87,7 @@ export default function CreatePage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const purchase = params.get('purchase') || ''
-    setPurchaseStatus(purchase)
+    setPurchaseStatus(params.get('purchase') || '')
   }, [])
 
   useEffect(() => {
@@ -105,59 +103,91 @@ export default function CreatePage() {
   }, [session, form.senderName])
 
   useEffect(() => {
-    if (!form.senderAgeBand || !form.characterId) return
-    if (!isCharacterAvailableForAge(form.characterId, form.senderAgeBand)) {
-      setForm((prev) => ({ ...prev, characterId: '' }))
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
     }
-  }, [form.senderAgeBand, form.characterId])
+  }, [])
 
-  const update = (field: keyof FormData, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
+  const stopAudio = () => {
+    if (!audioRef.current) return
+    audioRef.current.pause()
+    audioRef.current.currentTime = 0
+    setIsPlayingAudio(false)
   }
 
-  const availableCharacters = getAvailableCharacters(form.senderAgeBand)
-  const selectedCharacter = getCharacterById(form.characterId)
-  const personalTouchChars = form.personalTouch.length
-
-  const canProceed = () => {
-    switch (step) {
-      case 0:
-        return Boolean(form.senderName && form.valentineName && form.valentinePhone && form.senderAgeBand)
-      case 1:
-        return Boolean(form.contentType)
-      case 2:
-        return Boolean(
-          form.personalTouch.trim().length >= 20 &&
-          (form.contentType !== 'custom' || form.customMessage.trim().length > 0)
-        )
-      case 3:
-        return Boolean(form.characterId)
-      default:
-        return false
-    }
+  const selectCharacter = (characterId: CharacterId) => {
+    const character = getCharacterById(characterId)
+    setForm((prev) => ({
+      ...prev,
+      characterId,
+      voiceId: character?.voiceId || '',
+      script: '',
+    }))
+    stopAudio()
+    setAudioError('')
+    setAudioPreviewDataUrl('')
+    setAudioPreviewScriptSnapshot('')
   }
 
-  const handleSubmit = async () => {
-    const chosenCharacter = getCharacterById(form.characterId)
-    if (!chosenCharacter) {
-      setError('Select a character before generating the preview.')
+  const updateContentType = (contentType: ContentTypeId) => {
+    setForm((prev) => ({ ...prev, contentType, script: '' }))
+    stopAudio()
+    setAudioError('')
+    setAudioPreviewDataUrl('')
+    setAudioPreviewScriptSnapshot('')
+  }
+
+  const updatePersonalTouch = (personalTouch: string) => {
+    setForm((prev) => ({ ...prev, personalTouch, script: '' }))
+    stopAudio()
+    setAudioError('')
+    setAudioPreviewDataUrl('')
+    setAudioPreviewScriptSnapshot('')
+  }
+
+  const updateScript = (script: string) => {
+    setForm((prev) => ({ ...prev, script }))
+    stopAudio()
+    setAudioError('')
+    setAudioPreviewDataUrl('')
+    setAudioPreviewScriptSnapshot('')
+  }
+
+  const canContinue = () => {
+    if (step === 0) return Boolean(form.characterId)
+    if (step === 1) return Boolean(form.contentType && form.personalTouch.trim().length >= 20)
+    return false
+  }
+
+  const generateScript = async () => {
+    const character = getCharacterById(form.characterId)
+    if (!character) {
+      setError('Pick a character before generating.')
       return
     }
-    if (credits <= 0) {
-      setError('No call credits available. Apply a code or purchase a pack.')
+    if (!form.contentType || form.personalTouch.trim().length < 20) {
+      setError('Choose a content type and add at least 20 characters of detail.')
       return
     }
 
-    setIsGenerating(true)
+    setIsGeneratingScript(true)
     setError('')
+    setAudioError('')
 
     try {
       const scriptRes = await fetch('/api/generate-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          voiceId: chosenCharacter.voiceId,
+          senderName: form.senderName || session?.user?.name || 'Someone',
+          valentineName: form.valentineName || 'your valentine',
+          contentType: form.contentType,
+          personalTouch: form.personalTouch,
+          customMessage: '',
+          characterId: character.id,
         }),
       })
 
@@ -167,20 +197,150 @@ export default function CreatePage() {
       }
 
       const { script } = await scriptRes.json()
-
-      sessionStorage.setItem(
-        'cupidCall',
-        JSON.stringify({
-          ...form,
-          voiceId: chosenCharacter.voiceId,
-          script,
-        })
-      )
-
-      router.push('/preview')
+      setForm((prev) => ({
+        ...prev,
+        script,
+        voiceId: character.voiceId,
+      }))
+      setAudioPreviewDataUrl('')
+      setAudioPreviewScriptSnapshot('')
     } catch (err: any) {
-      setError(err.message || 'Could not generate preview. Please try again.')
-      setIsGenerating(false)
+      setError(err.message || 'Could not generate script. Please try again.')
+    } finally {
+      setIsGeneratingScript(false)
+    }
+  }
+
+  const handleContinue = async () => {
+    if (step === 0) {
+      setStep(1)
+      return
+    }
+    if (step === 1) {
+      if (!canContinue()) return
+      setStep(2)
+      if (!form.script) {
+        await generateScript()
+      }
+    }
+  }
+
+  const handleAudioPreview = async () => {
+    if (!form.script.trim()) {
+      setAudioError('Add script text before previewing audio.')
+      return
+    }
+
+    if (isPlayingAudio) {
+      stopAudio()
+      return
+    }
+
+    setAudioError('')
+    let previewDataUrl = audioPreviewDataUrl
+
+    try {
+      if (!previewDataUrl || audioPreviewScriptSnapshot !== form.script) {
+        setIsLoadingAudio(true)
+        const res = await fetch('/api/preview-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            script: form.script,
+            characterId: form.characterId,
+            voiceId: selectedCharacter?.voiceId || form.voiceId || 'Ara',
+          }),
+        })
+
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || 'Could not generate audio preview')
+
+        previewDataUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`
+        setAudioPreviewDataUrl(previewDataUrl)
+        setAudioPreviewScriptSnapshot(form.script)
+      }
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio(previewDataUrl)
+        audioRef.current.onended = () => setIsPlayingAudio(false)
+      } else {
+        audioRef.current.src = previewDataUrl
+      }
+
+      await audioRef.current.play()
+      setIsPlayingAudio(true)
+    } catch (err: any) {
+      setAudioError(err.message || 'Audio preview failed.')
+      setIsPlayingAudio(false)
+    } finally {
+      setIsLoadingAudio(false)
+    }
+  }
+
+  const handleSend = async () => {
+    const character = getCharacterById(form.characterId)
+    if (!character) {
+      setError('Pick a character first.')
+      return
+    }
+
+    if (!form.script.trim()) {
+      setError('Generate and review your script before sending.')
+      return
+    }
+
+    if (!form.senderName.trim() || !form.valentineName.trim() || !form.valentinePhone.trim()) {
+      setError('Fill in your name, their name, and their phone number.')
+      return
+    }
+
+    if (credits <= 0) {
+      setError('No call credits available. Apply LOVE or purchase a pack.')
+      return
+    }
+
+    setIsSending(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/make-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: form.valentinePhone.trim(),
+          senderName: form.senderName.trim(),
+          valentineName: form.valentineName.trim(),
+          script: form.script.trim(),
+          characterId: character.id,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.needsCredits) {
+        setError('No credits remaining. Use LOVE or purchase more.')
+        setIsSending(false)
+        return
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Failed to send call')
+
+      const sentPayload = {
+        ...form,
+        voiceId: character.voiceId,
+        callSid: data.callSid,
+        callId: data.callId,
+        scheduled: data.scheduled,
+        callStartsInMinutes: data.callStartsInMinutes,
+        preCallTextSent: data.preCallTextSent,
+        remainingCredits: data.remainingCredits,
+      }
+
+      sessionStorage.setItem('cupidCallSent', JSON.stringify(sentPayload))
+      router.push('/sent')
+    } catch (err: any) {
+      setError(err.message || 'Could not place the call.')
+      setIsSending(false)
     }
   }
 
@@ -195,7 +355,7 @@ export default function CreatePage() {
   }
 
   return (
-    <main className="relative min-h-screen pb-28">
+    <main className="relative min-h-screen pb-16">
       <nav className="wizard-shell flex items-center justify-between px-6 py-8">
         <a href="/" className="text-[14px] uppercase tracking-[0.14em] text-muted">
           Cupid Call
@@ -231,205 +391,201 @@ export default function CreatePage() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="text-center font-display text-[46px] italic leading-[1.08] tracking-[0.04em] text-primary md:text-[56px]">
-                {stepTitles[step]}
+              <h1 className="text-center font-display text-[44px] italic leading-[1.08] tracking-[0.04em] text-primary md:text-[54px]">
+                {STEP_TITLES[step]}
               </h1>
 
               {step === 0 && (
-                <div className="mt-9 space-y-6">
-                  <p className="text-center text-[14px] text-muted">
-                    Select your age band to unlock matching characters.
+                <div className="mt-8">
+                  <p className="mb-6 text-center text-[14px] text-muted">
+                    Pick one character style to shape your script and voice.
                   </p>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    {AGE_OPTIONS.map((age) => {
-                      const active = form.senderAgeBand === age.id
-                      const border = AGE_ACCENT[age.id]
-                      return (
-                        <button
-                          key={age.id}
-                          onClick={() => update('senderAgeBand', age.id)}
-                          className={`style-card text-left ${active ? 'selected' : ''}`}
-                          style={{
-                            borderColor: active ? border : undefined,
-                            background: active ? 'rgba(255,255,255,0.06)' : undefined,
-                          }}
-                        >
-                          <p className="text-[14px] font-medium text-primary">{age.label}</p>
-                          <p className="mt-1 text-[12px] text-muted">{age.desc}</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
-                      <input
-                        type="text"
-                        className="input-cupid"
-                        value={form.senderName}
-                        onChange={(e) => update('senderName', e.target.value)}
-                        placeholder="Enter your name"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Recipient name</label>
-                      <input
-                        type="text"
-                        className="input-cupid"
-                        value={form.valentineName}
-                        onChange={(e) => update('valentineName', e.target.value)}
-                        placeholder="Who should receive the call?"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Phone number</label>
-                      <input
-                        type="tel"
-                        className="input-cupid"
-                        value={form.valentinePhone}
-                        onChange={(e) => update('valentinePhone', e.target.value)}
-                        placeholder="+61..."
-                      />
-                      <p className="mt-2 text-[12px] text-muted">Include country code.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {step === 1 && (
-                <div className="mt-10">
-                  <p className="mb-6 text-center text-[14px] text-muted">Pick the emotional direction of the message.</p>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {CONTENT_TYPES.map((ct) => (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {CHARACTER_OPTIONS.map((character) => (
                       <button
-                        key={ct.id}
-                        onClick={() => update('contentType', ct.id)}
-                        className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
+                        key={character.id}
+                        onClick={() => selectCharacter(character.id)}
+                        className={`style-card character-card ${form.characterId === character.id ? 'selected' : ''}`}
                       >
-                        <div className="flex items-start gap-3">
-                          <span className="text-[24px] leading-none">{ct.emoji}</span>
-                          <div>
-                            <p className="text-[15px] font-medium text-primary">{ct.name}</p>
-                            <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
-                          </div>
-                        </div>
+                        <span className="emoji">{character.emoji}</span>
+                        <p className="title mt-4">{character.name}</p>
+                        <p className="meta mt-3">{character.ageGateLabel} • Voice {character.voiceId}</p>
+                        <p className="desc mt-3">{character.desc}</p>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {step === 2 && (
-                <div className="mt-10 space-y-5">
-                  <p className="text-center text-[14px] text-muted">
-                    Add context that only the two of you would recognize.
-                  </p>
+              {step === 1 && (
+                <div className="mt-8 space-y-6">
                   <div>
-                    <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Personal detail</label>
+                    <p className="mb-5 text-center text-[14px] text-muted">
+                      Choose message intent, then add all the private detail in one field.
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {CONTENT_TYPES.map((ct) => (
+                        <button
+                          key={ct.id}
+                          onClick={() => updateContentType(ct.id)}
+                          className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-[24px] leading-none">{ct.emoji}</span>
+                            <div>
+                              <p className="text-[15px] font-medium text-primary">{ct.name}</p>
+                              <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                      Personal details (1,000 max)
+                    </label>
                     <textarea
-                      className="input-cupid min-h-[220px]"
+                      className="input-cupid min-h-[240px]"
                       maxLength={1000}
                       value={form.personalTouch}
-                      onChange={(e) => update('personalTouch', e.target.value)}
-                      placeholder="How you met, shared phrases, private memories, the traits you admire..."
+                      onChange={(e) => updatePersonalTouch(e.target.value)}
+                      placeholder="How you met, inside jokes, what you love, pet names, memories..."
                     />
                     <p className="mt-2 text-right text-[12px] text-muted">{personalTouchChars}/1000</p>
                   </div>
-                  {form.contentType === 'custom' && (
-                    <div>
-                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Core message</label>
-                      <textarea
-                        className="input-cupid min-h-[140px]"
-                        value={form.customMessage}
-                        onChange={(e) => update('customMessage', e.target.value)}
-                        placeholder="The exact sentiment that must be included."
-                      />
-                    </div>
-                  )}
                 </div>
               )}
 
-              {step === 3 && (
-                <div className="mt-10">
-                  <p className="mb-6 text-center text-[14px] text-muted">
-                    Available now: {availableCharacters.length} of {CHARACTER_OPTIONS.length}
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {CHARACTER_OPTIONS.map((character) => {
-                      const unlocked = form.senderAgeBand
-                        ? isCharacterAvailableForAge(character.id, form.senderAgeBand)
-                        : false
+              {step === 2 && (
+                <div className="mt-8">
+                  {isGeneratingScript && !form.script ? (
+                    <div className="rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-6 py-12 text-center">
+                      <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-[var(--surface-border)] border-t-[var(--accent-rose)]" />
+                      <p className="text-[14px] text-muted">Grok is generating your script…</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_1fr]">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                            Editable Script
+                          </label>
+                          <textarea
+                            className="input-cupid min-h-[360px]"
+                            value={form.script}
+                            onChange={(e) => updateScript(e.target.value)}
+                            placeholder="Your generated script appears here."
+                          />
+                        </div>
 
-                      return (
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={handleAudioPreview}
+                            disabled={isLoadingAudio || !form.script.trim()}
+                            className="btn-secondary min-w-[190px]"
+                          >
+                            {isLoadingAudio
+                              ? 'Generating Audio…'
+                              : isPlayingAudio
+                                ? 'Pause Audio Preview'
+                                : 'Audio Preview'}
+                          </button>
+                          <button
+                            onClick={generateScript}
+                            disabled={isGeneratingScript}
+                            className="btn-secondary min-w-[170px]"
+                          >
+                            {isGeneratingScript ? 'Regenerating…' : 'Regenerate Script'}
+                          </button>
+                        </div>
+                        {audioError && <p className="text-[12px] text-[var(--age-red)]">{audioError}</p>}
+                      </div>
+
+                      <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-4">
+                        <div>
+                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
+                          <input
+                            type="text"
+                            className="input-cupid"
+                            value={form.senderName}
+                            onChange={(e) => setForm((prev) => ({ ...prev, senderName: e.target.value }))}
+                            placeholder="Your name"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Their name</label>
+                          <input
+                            type="text"
+                            className="input-cupid"
+                            value={form.valentineName}
+                            onChange={(e) => setForm((prev) => ({ ...prev, valentineName: e.target.value }))}
+                            placeholder="Recipient name"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                            Their phone number
+                          </label>
+                          <input
+                            type="tel"
+                            className="input-cupid"
+                            value={form.valentinePhone}
+                            onChange={(e) => setForm((prev) => ({ ...prev, valentinePhone: e.target.value }))}
+                            placeholder="+61..."
+                          />
+                        </div>
+
                         <button
-                          key={character.id}
-                          onClick={() => unlocked && update('characterId', character.id)}
-                          disabled={!unlocked}
-                          className={`style-card character-card ${
-                            form.characterId === character.id ? 'selected' : ''
-                          } ${!unlocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          onClick={handleSend}
+                          disabled={isSending || isGeneratingScript || credits <= 0}
+                          className="btn-cupid mt-2 w-full py-3"
                         >
-                          <span className="emoji">{character.emoji}</span>
-                          <p className="title mt-4">{character.name}</p>
-                          <p className="meta mt-3">{character.ageGateLabel} • Voice {character.voiceId}</p>
-                          <p className="desc mt-3">{character.desc}</p>
-                          {!unlocked && (
-                            <p className="mt-4 text-[11px] uppercase tracking-[0.12em] text-[var(--age-red)]">
-                              Locked
-                            </p>
-                          )}
+                          {isSending ? 'Sending Call…' : credits <= 0 ? 'Credits Required' : 'Send Call'}
                         </button>
-                      )
-                    })}
-                  </div>
-
-                  {selectedCharacter && (
-                    <div className="mt-5 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] px-4 py-3 text-center text-[13px] text-muted">
-                      Selected character: <span className="text-primary">{selectedCharacter.name}</span> with voice{' '}
-                      <span className="text-primary">{selectedCharacter.voiceId}</span>.
+                        <p className="text-[12px] text-muted">
+                          {selectedCharacter
+                            ? `Character: ${selectedCharacter.name} • Voice ${selectedCharacter.voiceId}`
+                            : 'Choose a character to continue.'}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </motion.div>
           </AnimatePresence>
+
+          <div className="mt-8 flex items-center justify-between gap-3">
+            <button
+              onClick={() => {
+                setError('')
+                if (step > 0) {
+                  setStep(step - 1)
+                } else {
+                  router.push('/')
+                }
+              }}
+              className="btn-secondary min-w-[98px]"
+            >
+              {step > 0 ? 'Back' : 'Home'}
+            </button>
+
+            <p className="min-h-[20px] max-w-[360px] text-center text-[12px] leading-[1.5] text-[var(--age-red)]">
+              {error}
+            </p>
+
+            {step < totalSteps - 1 ? (
+              <button onClick={handleContinue} disabled={!canContinue()} className="btn-cupid min-w-[104px]">
+                Continue
+              </button>
+            ) : (
+              <div className="w-[104px]" />
+            )}
+          </div>
         </div>
       </section>
-
-      <div className="bottom-bar fixed bottom-0 left-0 right-0 z-40 px-6 py-4">
-        <div className="wizard-shell flex items-center justify-between gap-4">
-          <button
-            onClick={() => (step > 0 ? setStep(step - 1) : router.push('/'))}
-            className="btn-secondary min-w-[96px]"
-          >
-            {step > 0 ? 'Back' : 'Home'}
-          </button>
-
-          <p className="min-h-[20px] max-w-[270px] text-center text-[12px] leading-[1.5] text-[var(--age-red)]">
-            {error}
-          </p>
-
-          {step < totalSteps - 1 ? (
-            <button
-              onClick={() => setStep(step + 1)}
-              disabled={!canProceed()}
-              className="btn-cupid min-w-[96px]"
-            >
-              Continue
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={!canProceed() || isGenerating || credits <= 0}
-              className="btn-cupid min-w-[146px]"
-            >
-              {isGenerating ? 'Generating…' : credits <= 0 ? 'Credits required' : 'Generate preview'}
-            </button>
-          )}
-        </div>
-      </div>
     </main>
   )
 }
