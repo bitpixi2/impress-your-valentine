@@ -32,6 +32,12 @@ const CONTENT_PROMPTS: Record<ContentTypeId, string> = {
   'apology': 'Write it as a sincere apology that takes ownership and asks for repair with care.',
 }
 
+function countWords(value: string) {
+  const text = value.trim()
+  if (!text) return 0
+  return text.split(/\s+/).filter(Boolean).length
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!XAI_API_KEY) {
@@ -64,8 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid content type selected' }, { status: 400 })
     }
     const personalTouchSafe = typeof personalTouch === 'string' ? personalTouch.trim() : ''
-    if (personalTouchSafe.length > 500) {
-      return NextResponse.json({ error: 'Personal details must be 500 characters or less' }, { status: 400 })
+    if (countWords(personalTouchSafe) > 500) {
+      return NextResponse.json({ error: 'Personal details must be 500 words or less' }, { status: 400 })
     }
 
     const senderNameSafe = (senderName || 'Someone').trim() || 'Someone'

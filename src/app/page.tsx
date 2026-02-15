@@ -27,18 +27,27 @@ export default function HomePage() {
           <img
             src="/cupid-call-logo.png"
             alt="Cupid Call"
-            className="h-auto w-[220px] sm:w-[290px]"
+            className="h-auto w-[396px] sm:w-[522px]"
             loading="eager"
             decoding="async"
           />
           <h1 className="mt-4 font-display text-[29px] italic leading-[1.12] tracking-[0.03em] text-primary sm:text-[43px]">
             Impress your Valentine,
             <br />
-            with a simple suprise.
+            with a simple surprise.
           </h1>
           <p className="mt-6 max-w-[58ch] text-[15px] leading-[1.82] text-muted sm:text-[16px]">
-            Hate using the phone? Don&apos;t know what to say? Choose your Cupid. Pick your intent. Preview the pitch.
-            Then Cupid will call and say it for you.
+            <span className="sm:hidden">
+              Hate using the phone? Don&apos;t know what to say? Pick a character. Select your intent. Preview the
+              pitch. Then Cupid will call and say it for you!
+            </span>
+            <span className="hidden sm:block">
+              Hate using the phone? Don&apos;t know what to say?
+              <br />
+              Pick a character. Select your intent. Preview the pitch.
+              <br />
+              Then Cupid will call and say it for you!
+            </span>
           </p>
 
           <div className="mt-9">
@@ -48,14 +57,24 @@ export default function HomePage() {
           </div>
 
           <p className="mt-7 max-w-[62ch] text-[14px] leading-[1.8] text-muted sm:text-[15px]">
-            Your valentine then receives a promo code to send a message back, for free!
+            Your valentine then receives a promo code to send a message back!
           </p>
         </motion.div>
       </section>
 
       <footer className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-10 pt-4">
         <div className="border-t border-[var(--surface-border)] pt-6 text-[12px] tracking-[0.05em] text-muted">
-          <p>Made with love by bitpixi</p>
+          <p>
+            Made with love by{' '}
+            <a
+              href="https://linkedin.com/in.bitpixi"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline decoration-[rgba(232,224,228,0.3)] underline-offset-4 hover:decoration-[rgba(232,224,228,0.7)]"
+            >
+              bitpixi
+            </a>
+          </p>
         </div>
       </footer>
     </main>

@@ -63,6 +63,35 @@ const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = 
   },
 }
 
+const CONTENT_TYPE_IMAGE: Record<ContentTypeId, { src: string; alt: string }> = {
+  'love-poem': {
+    src: '/love-poem.jpg',
+    alt: 'Love poem module art',
+  },
+  'miss-you': {
+    src: '/miss-you.jpg',
+    alt: 'Miss you module art',
+  },
+  'always-wanted-to-say': {
+    src: '/always-wanted-to-say.jpg',
+    alt: 'Always wanted to say module art',
+  },
+  'hype-up': {
+    src: '/hype-up.jpg',
+    alt: 'Hype up module art',
+  },
+  apology: {
+    src: '/apology.jpg',
+    alt: 'Apology module art',
+  },
+}
+
+function countWords(value: string) {
+  const text = value.trim()
+  if (!text) return 0
+  return text.split(/\s+/).filter(Boolean).length
+}
+
 export default function CreatePage() {
   const router = useRouter()
 
@@ -87,7 +116,7 @@ export default function CreatePage() {
   const totalSteps = 3
   const shellClass = 'mx-auto w-full max-w-[1320px]'
   const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
-  const personalTouchChars = form.personalTouch.length
+  const personalTouchWords = countWords(form.personalTouch)
 
   const loadCredits = async () => {
     try {
@@ -172,7 +201,7 @@ export default function CreatePage() {
 
   const canContinue = () => {
     if (step === 0) return Boolean(form.characterId)
-    if (step === 1) return Boolean(form.contentType)
+    if (step === 1) return Boolean(form.contentType) && personalTouchWords <= 500
     return false
   }
 
@@ -184,6 +213,10 @@ export default function CreatePage() {
     }
     if (!form.contentType) {
       setError('Choose a content type before generating.')
+      return
+    }
+    if (personalTouchWords > 500) {
+      setError('Personal details must be 500 words or less.')
       return
     }
 
@@ -442,6 +475,12 @@ export default function CreatePage() {
                           className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
                         >
                           <div>
+                            <img
+                              src={CONTENT_TYPE_IMAGE[ct.id].src}
+                              alt={CONTENT_TYPE_IMAGE[ct.id].alt}
+                              className="mb-3 h-[88px] w-full rounded-[10px] object-cover"
+                              loading="lazy"
+                            />
                             <p className="text-[15px] font-medium text-primary">{ct.name}</p>
                             <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
                           </div>
@@ -452,16 +491,17 @@ export default function CreatePage() {
 
                   <div>
                     <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                      Personal details (500 characters maximum)
+                      Personal details (500 words maximum)
                     </label>
                     <textarea
                       className="input-cupid min-h-[240px]"
-                      maxLength={500}
                       value={form.personalTouch}
                       onChange={(e) => updatePersonalTouch(e.target.value)}
                       placeholder="How you met, inside jokes, what you love, pet names, memories..."
                     />
-                    <p className="mt-2 text-right text-[12px] text-muted">{personalTouchChars}/500</p>
+                    <p className={`mt-2 text-right text-[12px] ${personalTouchWords > 500 ? 'text-[var(--age-red)]' : 'text-muted'}`}>
+                      {personalTouchWords}/500 words
+                    </p>
                   </div>
                 </div>
               )}
