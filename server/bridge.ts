@@ -58,7 +58,7 @@ interface CallConfig {
   valentineName: string
   script: string
   characterId: string
-  voiceId: string  // Ara, Rex, Sal, Eve, Leo
+  voiceId: string  // Ara, Rex, Sal, Eve, Leo, Gork
   createdAt: number
 }
 
@@ -281,7 +281,7 @@ function synthesizePreviewAudioForModel(
 // ===== Health check =====
 fastify.get('/', async () => ({
   status: 'Cupid Call Bridge Server 💘',
-  voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo'],
+  voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo', 'Gork'],
   realtimeUrl: buildRealtimeUrl(),
   realtimeModels: getRealtimeModelOrder(),
   preCallLeadMinutes: PRE_CALL_SMS_LEAD_MINUTES,
@@ -765,7 +765,7 @@ const start = async () => {
     const port = parseInt(PORT || BRIDGE_PORT)
     await fastify.listen({ port, host: '0.0.0.0' })
     fastify.log.info(`🏹 Cupid Call Bridge Server running on port ${port}`)
-    fastify.log.info(`💘 Grok Voice Agents: Ara, Rex, Sal, Eve, Leo`)
+    fastify.log.info(`💘 Grok Voice Agents: Ara, Rex, Sal, Eve, Leo, Gork`)
     fastify.log.info(`📞 Bridge WebSocket: ws://localhost:${port}/media-stream`)
   } catch (err) {
     fastify.log.error(err)

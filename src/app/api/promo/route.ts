@@ -9,8 +9,11 @@ export async function POST(req: NextRequest) {
     const { userId, needsCookie } = getGuestUserId(req)
     const { code } = await req.json()
 
-    if (!code) {
-      return NextResponse.json({ error: 'No promo code provided' }, { status: 400 })
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return NextResponse.json(
+        { success: false, message: 'Please enter a promo code.' },
+        { status: 400 }
+      )
     }
 
     // Ensure user exists

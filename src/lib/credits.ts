@@ -213,18 +213,21 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 }
 
 export async function applyPromoCode(userId: string, code: string): Promise<PromoResult> {
-  const upperCode = code.toUpperCase()
+  const upperCode = code.trim().toUpperCase()
+  if (!upperCode) {
+    return { success: false, message: 'Please enter a promo code.' }
+  }
   const promo = PROMO_CODES[upperCode]
 
   if (!promo) {
-    return { success: false, message: 'Invalid promo code' }
+    return { success: false, message: 'That promo code is not valid. Please check it and try again.' }
   }
 
   if (!hasSupabaseConfig()) {
     const user = memoryStore.get(userId)
     if (!user) return { success: false, message: 'User not found' }
     if (user.promoCodesUsed.includes(upperCode)) {
-      return { success: false, message: "You've already used this promo code" }
+      return { success: false, message: 'LOVE was already used on this account. You can still buy a 3-call pack.' }
     }
 
     user.promoCodesUsed.push(upperCode)
@@ -251,7 +254,7 @@ export async function applyPromoCode(userId: string, code: string): Promise<Prom
 
   const promoCodesUsed = user.promo_codes_used || []
   if (promoCodesUsed.includes(upperCode)) {
-    return { success: false, message: "You've already used this promo code" }
+    return { success: false, message: 'LOVE was already used on this account. You can still buy a 3-call pack.' }
   }
 
   await updateUserRow(userId, {
@@ -362,4 +365,3 @@ export async function useCredit(userId: string): Promise<UseCreditResult> {
     remaining: updated.remaining_credits,
   }
 }
-

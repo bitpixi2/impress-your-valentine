@@ -35,7 +35,7 @@ const INITIAL_FORM: FormData = {
   voiceId: '',
 }
 
-const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview', 'Add Credits + Send']
+const STEP_TITLES = ['Choose Your Cupid', 'Add Details', 'Preview', 'Add Credits', 'Delivery']
 const REGENERATE_COOLDOWN_SECONDS = 12
 
 const CHARACTER_MENU_IMAGE: Record<CharacterId, { src: string; alt: string }> = {
@@ -128,7 +128,7 @@ export default function CreatePage() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const totalSteps = 4
+  const totalSteps = 5
   const shellClass = 'mx-auto w-full max-w-[1320px]'
   const selectedCharacter = useMemo(() => getCharacterById(form.characterId), [form.characterId])
   const personalTouchWords = countWords(form.personalTouch)
@@ -217,6 +217,7 @@ export default function CreatePage() {
     if (step === 0) return Boolean(form.characterId)
     if (step === 1) return Boolean(form.contentType) && personalTouchWords <= 500
     if (step === 2) return Boolean(form.script.trim()) && !isScriptDirty
+    if (step === 3) return true
     return false
   }
 
@@ -273,13 +274,24 @@ export default function CreatePage() {
   }
 
   const handleContinue = async () => {
+    const scrollToTopOnMobile = () => {
+      if (typeof window === 'undefined') return
+      if (window.matchMedia('(max-width: 1023px)').matches) {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        })
+      }
+    }
+
     if (step === 0) {
       setStep(1)
+      scrollToTopOnMobile()
       return
     }
     if (step === 1) {
       if (!canContinue()) return
       setStep(2)
+      scrollToTopOnMobile()
       if (!form.script) {
         await generateScript()
       }
@@ -288,6 +300,13 @@ export default function CreatePage() {
     if (step === 2) {
       if (!canContinue()) return
       setStep(3)
+      scrollToTopOnMobile()
+      return
+    }
+    if (step === 3) {
+      if (!canContinue()) return
+      setStep(4)
+      scrollToTopOnMobile()
     }
   }
 
@@ -442,19 +461,17 @@ export default function CreatePage() {
 
   return (
     <main className="relative min-h-screen pb-16">
-      <nav className={`${shellClass} flex items-center justify-between px-6 py-8`}>
+      <nav className={`${shellClass} flex flex-col items-center px-6 py-8 text-center`}>
         <a href="/" aria-label="Cupid Call home">
           <img
             src="/cupid-call-logo.png"
             alt="Cupid Call"
-            className="h-auto w-[180px] max-w-[46vw]"
+            className="h-auto w-[234px] max-w-[70vw]"
             loading="eager"
             decoding="async"
           />
         </a>
-        <div className="text-[12px] uppercase tracking-[0.12em] text-muted">
-          Step {step + 1} / {totalSteps}
-        </div>
+        <div className="mt-2 text-[12px] uppercase tracking-[0.12em] text-muted">Step {step + 1}</div>
       </nav>
 
       <section className={`${shellClass} px-6 pb-12 pt-6`}>
@@ -505,7 +522,7 @@ export default function CreatePage() {
                         <button
                           type="button"
                           onClick={() => previewVoiceForCharacter(character.id)}
-                          className="btn-secondary w-full"
+                          className={`btn-secondary w-full ${loadingVoiceCharacter === character.id ? 'btn-loading-fill' : ''}`}
                           disabled={Boolean(loadingVoiceCharacter && loadingVoiceCharacter !== character.id)}
                         >
                           {loadingVoiceCharacter === character.id
@@ -583,19 +600,23 @@ export default function CreatePage() {
                       <div className="space-y-5">
                         {selectedCharacter && (
                           <div className="space-y-4">
-                            <img
-                              src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
-                              alt={CHARACTER_MENU_IMAGE[selectedCharacter.id].alt}
-                              className="h-auto w-full rounded-[12px]"
-                              loading="lazy"
-                            />
+                            <div className="character-choice-ring mx-auto w-full max-w-[240px]">
+                              <img
+                                src={CHARACTER_MENU_IMAGE[selectedCharacter.id].src}
+                                alt={CHARACTER_MENU_IMAGE[selectedCharacter.id].alt}
+                                className="character-choice-img"
+                                loading="lazy"
+                              />
+                            </div>
                             <p className="text-[14px] leading-[1.8] text-muted">
                               {CHARACTER_VOICE_PREVIEW_TEXT[selectedCharacter.id]}
                             </p>
                             <button
                               onClick={handlePreviewVoice}
                               disabled={Boolean(loadingVoiceCharacter && loadingVoiceCharacter !== selectedCharacter.id)}
-                              className="btn-secondary min-w-[190px]"
+                              className={`btn-secondary min-w-[190px] ${
+                                loadingVoiceCharacter === selectedCharacter.id ? 'btn-loading-fill' : ''
+                              }`}
                             >
                               {loadingVoiceCharacter === selectedCharacter.id
                                 ? 'Loading...'
@@ -606,11 +627,27 @@ export default function CreatePage() {
                           </div>
                         )}
 
-                        <div className="flex flex-wrap gap-3">
+                        {voicePreviewError && <p className="text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
+                          Script
+                        </label>
+                        <textarea
+                          className="input-cupid min-h-[920px] md:min-h-[620px] lg:min-h-[620px]"
+                          value={scriptDraft}
+                          onChange={(e) => {
+                            setScriptDraft(e.target.value)
+                            setScriptSaveMessage('')
+                          }}
+                          placeholder="Your generated script appears here."
+                        />
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                           <button
                             onClick={handleRegenerate}
                             disabled={isGeneratingScript || regenerateCooldown > 0}
-                            className="btn-secondary min-w-[190px]"
+                            className="btn-secondary w-full sm:w-auto sm:min-w-[190px]"
                           >
                             {isGeneratingScript
                               ? 'Loading...'
@@ -621,28 +658,11 @@ export default function CreatePage() {
                           <button
                             onClick={handleSaveScript}
                             disabled={!isScriptDirty}
-                            className="btn-secondary min-w-[160px]"
+                            className="btn-save w-full sm:w-auto sm:min-w-[160px]"
                           >
                             Save
                           </button>
                         </div>
-
-                        {voicePreviewError && <p className="text-[12px] text-[var(--age-red)]">{voicePreviewError}</p>}
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">
-                          Script
-                        </label>
-                        <textarea
-                          className="input-cupid min-h-[560px] lg:min-h-[780px]"
-                          value={scriptDraft}
-                          onChange={(e) => {
-                            setScriptDraft(e.target.value)
-                            setScriptSaveMessage('')
-                          }}
-                          placeholder="Your generated script appears here."
-                        />
                         {isScriptDirty && <p className="mt-2 text-[12px] text-[var(--age-amber)]">Unsaved changes.</p>}
                         {scriptSaveMessage && <p className="mt-2 text-[12px] text-[var(--age-green)]">{scriptSaveMessage}</p>}
                       </div>
@@ -652,9 +672,13 @@ export default function CreatePage() {
               )}
 
               {step === 3 && (
-                <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.15fr]">
+                <div className="mx-auto mt-8 w-full max-w-[760px]">
                   <CreditBar credits={credits} onCreditsUpdated={loadCredits} />
+                </div>
+              )}
 
+              {step === 4 && (
+                <div className="mx-auto mt-8 w-full max-w-[760px]">
                   <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-6">
                     <div>
                       <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your email</label>

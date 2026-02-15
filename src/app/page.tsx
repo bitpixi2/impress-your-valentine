@@ -38,11 +38,11 @@ export default function HomePage() {
           </h1>
           <p className="mt-6 max-w-[58ch] text-[15px] leading-[1.82] text-muted sm:text-[16px]">
             <span className="sm:hidden">
-              Hate using the phone? Don&apos;t know what to say? Pick a character. Select your intent. Preview the
-              pitch. Then Cupid will call and say it for you!
+              <strong className="font-medium text-primary">Hate using the phone? Don&apos;t know what to say?</strong>{' '}
+              Pick a character. Select your intent. Preview the pitch. Then Cupid will call and say it for you!
             </span>
             <span className="hidden sm:block">
-              Hate using the phone? Don&apos;t know what to say?
+              <strong className="font-medium text-primary">Hate using the phone? Don&apos;t know what to say?</strong>
               <br />
               Pick a character. Select your intent. Preview the pitch.
               <br />
@@ -65,7 +65,16 @@ export default function HomePage() {
       <footer className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-10 pt-4">
         <div className="border-t border-[var(--surface-border)] pt-6 text-[12px] tracking-[0.05em] text-muted">
           <p>
-            Made with love by{' '}
+            Made for{' '}
+            <a
+              href="https://www.sophiie.ai/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline decoration-[rgba(232,224,228,0.3)] underline-offset-4 hover:decoration-[rgba(232,224,228,0.7)]"
+            >
+              Sophiie hackathon
+            </a>{' '}
+            by{' '}
             <a
               href="https://linkedin.com/in.bitpixi"
               target="_blank"

@@ -15,17 +15,27 @@ export default function CreditBar({ credits, onCreditsUpdated }: CreditBarProps)
   const [isBuying, setIsBuying] = useState(false)
 
   const redeemPromo = async () => {
-    if (!promoCode) return
+    const normalizedCode = promoCode.trim().toUpperCase()
+    if (!normalizedCode) {
+      setPromoMessage('Please enter a promo code.')
+      setPromoError(true)
+      return
+    }
     setIsRedeeming(true)
     setPromoMessage('')
     try {
       const res = await fetch('/api/promo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoCode }),
+        body: JSON.stringify({ code: normalizedCode }),
       })
-      const data = await res.json()
-      setPromoMessage(data.message)
+      const data = await res.json().catch(() => ({}))
+      const messageRaw =
+        (typeof data?.message === 'string' && data.message) ||
+        (typeof data?.error === 'string' && data.error) ||
+        ''
+      const message = messageRaw || (res.ok ? 'Code applied.' : 'Could not apply code. Please try again.')
+      setPromoMessage(message)
       setPromoError(!res.ok)
       if (res.ok) {
         setPromoCode('')

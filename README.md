@@ -12,7 +12,7 @@
 | Project Name | Cupid Call |
 | One-Line Description | AI-generated Valentine phone calls delivered live with a character voice. |
 | Demo Video Link | _Add your demo link here_ |
-| Tech Stack | Next.js 14, React, TypeScript, Tailwind CSS, NextAuth, Stripe, Twilio, Fastify WebSocket bridge |
+| Tech Stack | Next.js 14, React, TypeScript, Tailwind CSS, NextAuth, Stripe, Twilio, Supabase, Fastify WebSocket bridge |
 | AI Provider(s) Used | xAI Grok (text + voice/realtime) |
 
 # About Your Project
@@ -21,6 +21,7 @@
 
 Cupid Call lets a user create a personalized Valentine telegram and deliver it as a live AI phone call.  
 The user chooses a content type, adds private relationship details, selects a persona, previews the generated script, and sends the call.
+Credits, promo usage, and purchase records are stored in Supabase for durable tracking.
 
 ## How does the interaction work?
 
@@ -46,11 +47,14 @@ flowchart TD
     D5 --> E
     E --> F[Personal Details - up to 500 words]
     F --> G[Preview Script, or Regenerate]
-    G --> H[Enter Delivery Details]
+    G --> K[Add Credits]
+    K --> H[Enter Delivery Details]
     H -->|Approve + Send| W[SMS Warning - 5 min heads up]
     W -->|5 min later| I[Phone Rings - Live AI Voice]
     I --> J[SMS after call - free promo code]
     J -->|Recipient visits site| A
+    K --> S[(Supabase Credits Store)]
+    H --> S
     style A fill:#F8D7E0,stroke:#C47A8E,color:#000000
     style D fill:#D6EAFF,stroke:#4a9eed,color:#000000
     style D1 fill:#D4F5DD,stroke:#51cf66,color:#000000
@@ -61,10 +65,12 @@ flowchart TD
     style E fill:#EDE4FB,stroke:#8b5cf6,color:#000000
     style F fill:#EDE4FB,stroke:#8b5cf6,color:#000000
     style G fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style K fill:#FFF3D0,stroke:#C9A96E,color:#000000
     style H fill:#FFF3D0,stroke:#C9A96E,color:#000000
     style W fill:#FFE8D6,stroke:#F97316,color:#000000
     style I fill:#D4F5DD,stroke:#22c55e,color:#000000
     style J fill:#F8D7E0,stroke:#C47A8E,color:#000000
+    style S fill:#D6EAFF,stroke:#3b82f6,color:#000000
 ```
 
 ## What makes it special?
@@ -96,7 +102,7 @@ That's the loop for one call to become more. 92% of people trust recommendations
 
 ## Architecture / Technical Notes
 
-Frontend/API runs on Next.js. Checkout and webhook handling use Stripe.  
+Frontend/API runs on Next.js. Checkout and webhook handling use Stripe. Supabase stores durable credits, promo redemption, and purchase records.  
 Phone calls and viral-loop SMS use Twilio. Realtime two-way voice uses a separate WebSocket bridge service (`server/bridge.ts`) that connects Twilio Media Streams to xAI Realtime Voice.  
 Viral loop behavior is two scheduled SMS events per successful send: pre-call alert (+5 min before call) and post-call referral message (+5 min after call end, includes promo code and opt-out language).
 
@@ -104,14 +110,17 @@ Viral loop behavior is two scheduled SMS events per successful send: pre-call al
 flowchart LR
     subgraph Frontend[Vercel - Next.js]
         LP[Landing Page]
-        Form[4-Step Wizard]
+        Form[5-Step Wizard]
         Send[Enter Details and Send]
-        Credits[Credits - promo code + Stripe]
+        Credits[Add Credits - promo code + Stripe]
     end
     subgraph Bridge[Railway - Bridge Server]
         Outbound[POST /outbound-call]
         MediaWS[WS /media-stream]
         SMSWarning[SMS Warning - 5 min heads up]
+    end
+    subgraph Data[Supabase]
+        CreditDB[(cupid_users and cupid_purchases)]
     end
     subgraph External[External Services]
         Google[Google OAuth]
@@ -128,6 +137,8 @@ flowchart LR
     Twilio -->|SMS to recipient| Phone
     SMSWarning -->|5 min later| Outbound
     Credits --> Stripe
+    Credits --> CreditDB
+    Send --> CreditDB
     Outbound --> Twilio
     MediaWS <--> GrokVoice
     MediaWS <--> Twilio
@@ -135,6 +146,7 @@ flowchart LR
     Phone -.->|promo code | LP
     style Frontend fill:#F8D7E0,stroke:#C47A8E,color:#000000
     style Bridge fill:#FFF3D0,stroke:#C9A96E,color:#000000
+    style Data fill:#D6EAFF,stroke:#3b82f6,color:#000000
     style External fill:#D4F5DD,stroke:#22c55e,color:#000000
     style Phone fill:#FDDEDE,stroke:#ef4444,color:#000000
     style GrokVoice fill:#D4F5DD,stroke:#22c55e,color:#000000

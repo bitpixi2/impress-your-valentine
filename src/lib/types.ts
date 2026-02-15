@@ -10,7 +10,7 @@ export type ContentTypeId =
   | 'always-wanted-to-say'
   | 'hype-up'
   | 'apology'
-export type GrokVoiceId = 'Ara' | 'Rex' | 'Sal' | 'Eve' | 'Leo'
+export type GrokVoiceId = 'Ara' | 'Rex' | 'Sal' | 'Eve' | 'Leo' | 'Gork'
 
 export interface CupidCallFormData {
   senderName: string
@@ -69,6 +69,7 @@ export const GROK_VOICES: Array<{
   { id: 'Sal', name: 'Sal', desc: 'Balanced and versatile', gender: 'Neutral', tone: 'Smooth, balanced' },
   { id: 'Eve', name: 'Eve', desc: 'Playful and energetic', gender: 'Female', tone: 'Energetic, upbeat' },
   { id: 'Leo', name: 'Leo', desc: 'Strong and dramatic', gender: 'Male', tone: 'Commanding, intense' },
+  { id: 'Gork', name: 'Gork', desc: 'Deep and rugged', gender: 'Male', tone: 'Gruff, handsome' },
 ]
 
 export const CHARACTER_OPTIONS: CharacterOption[] = [
@@ -98,7 +99,7 @@ export const CHARACTER_OPTIONS: CharacterOption[] = [
     name: 'Vampire',
     desc: 'Intense poetic gothic romance with mature, consensual sensual tension.',
     sample: '"Centuries of darkness... and then you."',
-    voiceId: 'Leo',
+    voiceId: 'Gork',
   },
   {
     id: 'sakura-confession',
