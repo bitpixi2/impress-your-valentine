@@ -24,42 +24,40 @@ The user chooses a content type, adds private relationship details, selects a ch
 
 ```mermaid
 flowchart TD
-    A[Landing Page] -->|Send a Cupid Call| B[Sign In]
-    B --> D[Pick Character]
+    A[Landing Page] -->|Send a Cupid Call| D[Choose your Cupid]
     
-    D --> D1[Kid Bot - All ages]
-    D --> D2[Victorian Gentleman - 16+]
-    D --> D3[Southern Belle - 16+]
-    D --> D4[Nocturne Vampire - 18+]
-    D --> D5[Sakura Confession - 18+]
+    D --> D1[Kid-Friendly]
+    D --> D2[Gentleman]
+    D --> D3[Lady]
+    D --> D4[18+ Vampire]
+    D --> D5[18+ Sakura]
     
     D1 --> E[Choose Content Type]
     D2 --> E
     D3 --> E
     D4 --> E
     D5 --> E
-
-    E --> F[Personal Details - 1000 chars]
-    F --> G[Grok Generates Script]
-    G --> H[Preview Telegram]
-    H -->|Approve + Send| I[Phone Rings - Live AI Voice]
-    I --> J[SMS 5 min later - code LOVE]
+    E --> F[Personal Details - up to 500 words]
+    F --> G[Preview Script, or Regenerate]
+    G --> H[Enter Delivery Details]
+    H -->|Approve + Send| W[SMS Warning - 5 min heads up]
+    W -->|5 min later| I[Phone Rings - Live AI Voice]
+    I --> J[SMS after call - free promo code]
     J -->|Recipient visits site| A
-
-    style A fill:#2a0a1a,stroke:#C47A8E,color:#E8E0E4
-    style B fill:#1a1a2e,stroke:#C9A96E,color:#E8E0E4
-    style D fill:#0a1a2a,stroke:#4a9eed,color:#E8E0E4
-    style D1 fill:#0a2a1a,stroke:#51cf66,color:#E8E0E4
-    style D2 fill:#2a1f00,stroke:#ffd43b,color:#E8E0E4
-    style D3 fill:#2a1f00,stroke:#ffd43b,color:#E8E0E4
-    style D4 fill:#2a0a0a,stroke:#ef4444,color:#E8E0E4
-    style D5 fill:#2a0a0a,stroke:#ef4444,color:#E8E0E4
-    style E fill:#1e1030,stroke:#8b5cf6,color:#E8E0E4
-    style F fill:#1e1030,stroke:#8b5cf6,color:#E8E0E4
-    style G fill:#0a2a1a,stroke:#22c55e,color:#E8E0E4
-    style H fill:#2a1f00,stroke:#C9A96E,color:#E8E0E4
-    style I fill:#0a2a1a,stroke:#22c55e,color:#E8E0E4
-    style J fill:#2a0a1a,stroke:#C47A8E,color:#E8E0E4
+    style A fill:#F8D7E0,stroke:#C47A8E,color:#000000
+    style D fill:#D6EAFF,stroke:#4a9eed,color:#000000
+    style D1 fill:#D4F5DD,stroke:#51cf66,color:#000000
+    style D2 fill:#FFF3D0,stroke:#ffd43b,color:#000000
+    style D3 fill:#FFF3D0,stroke:#ffd43b,color:#000000
+    style D4 fill:#FDDEDE,stroke:#ef4444,color:#000000
+    style D5 fill:#FDDEDE,stroke:#ef4444,color:#000000
+    style E fill:#EDE4FB,stroke:#8b5cf6,color:#000000
+    style F fill:#EDE4FB,stroke:#8b5cf6,color:#000000
+    style G fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style H fill:#FFF3D0,stroke:#C9A96E,color:#000000
+    style W fill:#FFE8D6,stroke:#F97316,color:#000000
+    style I fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style J fill:#F8D7E0,stroke:#C47A8E,color:#000000
 ```
 
 ## How does the interaction work?
@@ -73,18 +71,15 @@ The viral loop adds SMS touchpoints: one text 5 minutes before the call to incre
 flowchart LR
     subgraph Frontend[Vercel - Next.js]
         LP[Landing Page]
-        Auth[Sign In - NextAuth]
         Form[4-Step Wizard]
-        Preview[Preview]
-        Sent[Sent + CTA]
-        Credits[Credits - LOVE code + Stripe]
+        Send[Enter Details and Send]
+        Credits[Credits - promo code + Stripe]
     end
-
     subgraph Bridge[Railway - Bridge Server]
         Outbound[POST /outbound-call]
         MediaWS[WS /media-stream]
+        SMSWarning[SMS Warning - 5 min heads up]
     end
-
     subgraph External[External Services]
         Google[Google OAuth]
         Stripe[Stripe - $10 AUD / 3-pack]
@@ -92,32 +87,33 @@ flowchart LR
         GrokVoice[xAI Grok Voice Agent - Realtime]
         Twilio[Twilio Voice + SMS]
     end
-
     Phone[Valentines Phone]
-
-    LP --> Auth --> Form --> Preview --> Sent
-    Auth --> Google
+    LP --> Form --> Preview --> Sent
     Form -->|generate script| GrokText
-    Sent -->|make call| Outbound
+    Sent -->|send warning SMS| SMSWarning
+    SMSWarning --> Twilio
+    Twilio -->|SMS to recipient| Phone
+    SMSWarning -->|5 min later| Outbound
     Credits --> Stripe
     Outbound --> Twilio
     MediaWS <--> GrokVoice
     MediaWS <--> Twilio
-    Twilio --> Phone
-    Phone -.->|code LOVE| LP
-
-    style Frontend fill:#0C0A0E,stroke:#C47A8E,color:#E8E0E4
-    style Bridge fill:#0C0A0E,stroke:#C9A96E,color:#E8E0E4
-    style External fill:#0C0A0E,stroke:#22c55e,color:#E8E0E4
-    style Phone fill:#2a0a1a,stroke:#ef4444,color:#E8E0E4
-    style GrokVoice fill:#0a2a1a,stroke:#22c55e,color:#b2f2bb
-    style GrokText fill:#0a2a1a,stroke:#22c55e,color:#b2f2bb
+    Twilio -->|voice call| Phone
+    Phone -.->|promo code | LP
+    style Frontend fill:#F8D7E0,stroke:#C47A8E,color:#000000
+    style Bridge fill:#FFF3D0,stroke:#C9A96E,color:#000000
+    style External fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style Phone fill:#FDDEDE,stroke:#ef4444,color:#000000
+    style GrokVoice fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style GrokText fill:#D4F5DD,stroke:#22c55e,color:#000000
+    style SMSWarning fill:#FFE8D6,stroke:#F97316,color:#000000
 ```
 
 ## What makes it special?
 
 It combines high-personalization text generation with live voice interaction in a single flow.  
-Age-gated character options and scripted call framing make the experience feel playful, memorable, and safe by design.
+Character options and scripted call framing make the experience feel playful, memorable, and safe by design.
+I also incorporated "vibe marketing" flows, with the goal of people to share by word of mouth.
 
 ## How to run it
 
