@@ -52,6 +52,7 @@ Credits, promo usage, and purchase records are stored in Supabase for durable tr
 
 The sender chooses one of five characters, their intent and optional personalization.
 The app generates a script with Grok, shows a preview they can re-generate (with cooldown), delivery details are entered and when sent, it triggers a Twilio outbound texts and call. 
+The Preview page includes full audio preview playback of the current on-screen script text before sending.
 The viral loop adds SMS touchpoints: one text 5 minutes before the call to increase pickup/recording behavior, and one text 5 minutes after the call with code LOVE to drive referral sends.
 A realtime bridge streams audio between Twilio and Grok Voice so the recipient can hear the telegram and speak back briefly.  
 
@@ -130,6 +131,8 @@ That's the loop for one call to become more. 92% of people trust recommendations
 Frontend/API runs on Next.js. Checkout and webhook handling use Stripe. Supabase stores durable credits, promo redemption, and purchase records.  
 Phone calls and viral-loop SMS use Twilio. Realtime two-way voice uses a separate WebSocket bridge service (`server/bridge.ts`) that connects Twilio Media Streams to xAI Realtime Voice.  
 Viral loop behavior is two scheduled SMS events per successful send: pre-call alert (+5 min before call) and post-call referral message (+5 min after call end, includes promo code and opt-out language).
+
+Current production reliability setting: pre-call delay is intentionally set to 0 minutes (instead of 1 minute) after user feedback and bug reports from Canada and New Zealand where Railway restarts during high traffic could interrupt in-memory delayed call scheduling.
 
 ```mermaid
 flowchart LR
