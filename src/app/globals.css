@@ -258,6 +258,11 @@ body {
   background: rgba(196, 122, 142, 0.08);
 }
 
+.style-card-bleed {
+  padding: 0;
+  overflow: hidden;
+}
+
 .character-card {
   aspect-ratio: 3 / 4;
   display: flex;

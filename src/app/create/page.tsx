@@ -17,7 +17,6 @@ interface FormData {
   characterId: CharacterId | ''
   contentType: ContentTypeId | ''
   personalTouch: string
-  senderName: string
   senderEmail: string
   valentineName: string
   valentinePhone: string
@@ -29,7 +28,6 @@ const INITIAL_FORM: FormData = {
   characterId: '',
   contentType: '',
   personalTouch: '',
-  senderName: '',
   senderEmail: '',
   valentineName: '',
   valentinePhone: '',
@@ -108,7 +106,6 @@ export default function CreatePage() {
   const [error, setError] = useState('')
   const [voicePreviewError, setVoicePreviewError] = useState('')
   const [credits, setCredits] = useState(0)
-  const [hasUsedLoveCode, setHasUsedLoveCode] = useState(false)
   const [purchaseStatus, setPurchaseStatus] = useState('')
 
   const [isGeneratingScript, setIsGeneratingScript] = useState(false)
@@ -135,7 +132,6 @@ export default function CreatePage() {
       if (!res.ok) return
       const data = await res.json()
       setCredits(data.remainingCredits)
-      setHasUsedLoveCode(data.hasUsedLoveCode)
     } catch {
       // Ignore transient fetch issues.
     }
@@ -240,7 +236,7 @@ export default function CreatePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          senderName: form.senderName || 'Someone',
+          senderName: 'Someone special',
           valentineName: form.valentineName || 'your valentine',
           contentType: form.contentType,
           personalTouch: form.personalTouch,
@@ -376,8 +372,8 @@ export default function CreatePage() {
       return
     }
 
-    if (!form.senderName.trim() || !form.senderEmail.trim() || !form.valentineName.trim() || !form.valentinePhone.trim()) {
-      setError('Fill in your name, email, their name, and their phone number.')
+    if (!form.senderEmail.trim() || !form.valentineName.trim() || !form.valentinePhone.trim()) {
+      setError('Fill in your email, their name, and their phone number.')
       return
     }
 
@@ -395,7 +391,6 @@ export default function CreatePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: form.valentinePhone.trim(),
-          senderName: form.senderName.trim(),
           senderEmail: form.senderEmail.trim(),
           valentineName: form.valentineName.trim(),
           script: form.script.trim(),
@@ -503,17 +498,19 @@ export default function CreatePage() {
                         <button
                           key={ct.id}
                           onClick={() => updateContentType(ct.id)}
-                          className={`style-card text-left ${form.contentType === ct.id ? 'selected' : ''}`}
+                          className={`style-card style-card-bleed text-left ${form.contentType === ct.id ? 'selected' : ''}`}
                         >
                           <div>
                             <img
                               src={CONTENT_TYPE_IMAGE[ct.id].src}
                               alt={CONTENT_TYPE_IMAGE[ct.id].alt}
-                              className="mb-3 h-[88px] w-full rounded-[10px] object-cover"
+                              className="h-[120px] w-full object-cover"
                               loading="lazy"
                             />
-                            <p className="text-[15px] font-medium text-primary">{ct.name}</p>
-                            <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
+                            <div className="px-4 pb-4 pt-3">
+                              <p className="text-[15px] font-medium text-primary">{ct.name}</p>
+                              <p className="mt-1 text-[13px] leading-[1.7] text-muted">{ct.desc}</p>
+                            </div>
                           </div>
                         </button>
                       ))}
@@ -624,18 +621,10 @@ export default function CreatePage() {
               )}
 
               {step === 3 && (
-                <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_1fr]">
+                <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.15fr]">
+                  <CreditBar credits={credits} onCreditsUpdated={loadCredits} />
+
                   <div className="space-y-4 rounded-[12px] border border-[var(--surface-border)] bg-[var(--surface-bg)] p-6">
-                    <div>
-                      <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your name</label>
-                      <input
-                        type="text"
-                        className="input-cupid"
-                        value={form.senderName}
-                        onChange={(e) => setForm((prev) => ({ ...prev, senderName: e.target.value }))}
-                        placeholder="Your name"
-                      />
-                    </div>
                     <div>
                       <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Your email</label>
                       <input
@@ -685,8 +674,6 @@ export default function CreatePage() {
                         : 'Choose a character to continue.'}
                     </p>
                   </div>
-
-                  <CreditBar credits={credits} hasUsedLoveCode={hasUsedLoveCode} onCreditsUpdated={loadCredits} />
                 </div>
               )}
             </motion.div>

@@ -11,8 +11,10 @@ export async function POST(req: NextRequest) {
     const { userId, needsCookie } = getGuestUserId(req)
 
     const { phone, senderName, senderEmail, valentineName, script, characterId } = await req.json()
+    const senderNameSafe =
+      typeof senderName === 'string' && senderName.trim() ? senderName.trim() : 'Someone special'
 
-    if (!phone || !senderName || !script || !characterId) {
+    if (!phone || !script || !characterId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest) {
     console.info('[CupidCall] outbound call request', {
       userId,
       senderEmail: senderEmailSafe,
-      senderName,
+      senderName: senderNameSafe,
       valentineName,
       phone: maskedPhone,
       ip,
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         phone,
-        senderName,
+        senderName: senderNameSafe,
         senderEmail: senderEmailSafe,
         valentineName,
         script,

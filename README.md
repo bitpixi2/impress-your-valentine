@@ -87,7 +87,7 @@ How to Use Cupid Call:
 ## Viral Loop
 
 Five minutes before the call, your valentine gets a text:  
-"💘 A Cupid Call is on its way. You might want to pick up and hit record."
+"💘 A Cupid Call is on its way, and it will come from a +1 phone number."
 
 Five minutes after the call ends, they get another:  
 "💘 Enjoyed Cupid Call? Send one 1 free with code LOVE at https://cupidcall.bitpixi.com. Reply STOP to opt out."

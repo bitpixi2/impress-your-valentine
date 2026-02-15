@@ -36,12 +36,13 @@ const {
 const PRE_CALL_SMS_LEAD_MINUTES = parseMinutes(process.env.PRE_CALL_SMS_LEAD_MINUTES, 5)
 const POST_CALL_SMS_DELAY_MINUTES = parseMinutes(process.env.POST_CALL_SMS_DELAY_MINUTES, 5)
 const PENDING_CALL_TTL_MS = Math.max(PRE_CALL_SMS_LEAD_MINUTES + POST_CALL_SMS_DELAY_MINUTES + 15, 20) * 60 * 1000
-const PRE_CALL_SMS_BODY = '💘 A Cupid Call is on its way. You might want to pick up and hit record.'
+const PRE_CALL_SMS_BODY = '💘 A Cupid Call is on its way, and it will come from a +1 phone number.'
 const POST_CALL_SMS_BODY = '💘 Enjoyed Cupid Call? Send one 1 free with code LOVE at https://cupidcall.bitpixi.com. Reply STOP to opt out.'
 const PREVIEW_AUDIO_SAMPLE_RATE = parsePositiveInt(process.env.PREVIEW_AUDIO_SAMPLE_RATE, 24000)
 const PREVIEW_AUDIO_TIMEOUT_MS = parsePositiveInt(process.env.PREVIEW_AUDIO_TIMEOUT_MS, 22000)
-const PRIMARY_REALTIME_MODEL = process.env.XAI_REALTIME_MODEL || 'grok-4-1-fast-non-reasoning'
-const FALLBACK_REALTIME_MODEL = process.env.XAI_REALTIME_FALLBACK_MODEL || 'grok-4-1-fast-non-reasoning'
+const REALTIME_URL = process.env.XAI_REALTIME_URL || 'wss://api.x.ai/v1/realtime'
+const PRIMARY_REALTIME_MODEL = process.env.XAI_REALTIME_MODEL || 'voice-agent-default'
+const FALLBACK_REALTIME_MODEL = process.env.XAI_REALTIME_FALLBACK_MODEL || ''
 
 const fastify = Fastify({ logger: true })
 fastify.register(fastifyWebsocket)
@@ -81,9 +82,8 @@ function getRealtimeModelOrder(): string[] {
   return Array.from(new Set([PRIMARY_REALTIME_MODEL, FALLBACK_REALTIME_MODEL].filter(Boolean)))
 }
 
-function buildRealtimeUrl(model: string): string {
-  const qp = new URLSearchParams({ model })
-  return `wss://api.x.ai/v1/realtime?${qp.toString()}`
+function buildRealtimeUrl(): string {
+  return REALTIME_URL
 }
 
 function pcm16ToWav(pcmData: Buffer, sampleRate: number): Buffer {
@@ -134,7 +134,7 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
       return
     }
 
-    const ws = new WebSocket(buildRealtimeUrl(model), {
+    const ws = new WebSocket(buildRealtimeUrl(), {
       headers: { Authorization: `Bearer ${XAI_API_KEY}` },
     })
 
@@ -191,8 +191,21 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
         session: {
           voice: voiceId,
           instructions: 'Read the user script in a warm, natural tone. Keep pacing clean and expressive.',
-          input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
+          audio: {
+            input: {
+              format: {
+                type: 'audio/pcm',
+                rate: PREVIEW_AUDIO_SAMPLE_RATE,
+              },
+            },
+            output: {
+              format: {
+                type: 'audio/pcm',
+                rate: PREVIEW_AUDIO_SAMPLE_RATE,
+              },
+            },
+          },
+          turn_detection: null,
         },
       }))
 
@@ -210,14 +223,19 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
         },
       }))
 
-      ws.send(JSON.stringify({ type: 'response.create' }))
+      ws.send(JSON.stringify({
+        type: 'response.create',
+        response: {
+          modalities: ['audio'],
+        },
+      }))
     })
 
     ws.on('message', (raw: any) => {
       try {
         const data = JSON.parse(raw.toString())
 
-        if (data.type === 'response.audio.delta' && data.delta) {
+        if ((data.type === 'response.output_audio.delta' || data.type === 'response.audio.delta') && data.delta) {
           receivedAudio = true
           pcmChunks.push(Buffer.from(data.delta, 'base64'))
           refreshIdle()
@@ -227,7 +245,8 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
         if (
           data.type === 'response.done' ||
           data.type === 'response.completed' ||
-          data.type === 'response.output_audio.done'
+          data.type === 'response.output_audio.done' ||
+          data.type === 'response.output_audio.completed'
         ) {
           finalize()
           return
@@ -258,7 +277,10 @@ function synthesizePreviewAudioForModel(script: string, voiceId: string, model: 
 fastify.get('/', async () => ({
   status: 'Cupid Call Bridge Server 💘',
   voices: ['Ara', 'Rex', 'Sal', 'Eve', 'Leo'],
+  realtimeUrl: buildRealtimeUrl(),
   realtimeModels: getRealtimeModelOrder(),
+  preCallLeadMinutes: PRE_CALL_SMS_LEAD_MINUTES,
+  postCallSmsDelayMinutes: POST_CALL_SMS_DELAY_MINUTES,
 }))
 
 // ===== Script audio preview (Grok voice) =====
@@ -301,8 +323,10 @@ fastify.post('/outbound-call', async (request, reply) => {
     voiceId = 'Ara',
     callId,
   } = request.body as any
+  const senderNameSafe =
+    typeof senderName === 'string' && senderName.trim() ? senderName.trim() : 'Someone special'
 
-  if (!phone || !senderName || !script || !characterId) {
+  if (!phone || !script || !characterId) {
     return reply.status(400).send({ error: 'Missing required fields' })
   }
 
@@ -314,7 +338,7 @@ fastify.post('/outbound-call', async (request, reply) => {
 
   // Store the call config so the WebSocket handler can retrieve it
   pendingCalls.set(id, {
-    senderName,
+    senderName: senderNameSafe,
     valentineName,
     script,
     characterId,
@@ -365,7 +389,7 @@ fastify.post('/outbound-call', async (request, reply) => {
     callLookupBySid.set(call.sid, {
       callId: id,
       phone,
-      senderName,
+      senderName: senderNameSafe,
       valentineName: valentineName || 'there',
       createdAt: Date.now(),
     })
@@ -539,7 +563,7 @@ fastify.register(async (app) => {
         let opened = false
         let switched = false
 
-        const ws = new WebSocket(buildRealtimeUrl(model), {
+        const ws = new WebSocket(buildRealtimeUrl(), {
           headers: {
             Authorization: `Bearer ${XAI_API_KEY}`,
           },
@@ -575,8 +599,18 @@ fastify.register(async (app) => {
             session: {
               voice: callConfig.voiceId,
               instructions: systemPrompt,
-              input_audio_format: 'g711_ulaw',
-              output_audio_format: 'g711_ulaw',
+              audio: {
+                input: {
+                  format: {
+                    type: 'audio/pcmu',
+                  },
+                },
+                output: {
+                  format: {
+                    type: 'audio/pcmu',
+                  },
+                },
+              },
               turn_detection: {
                 type: 'server_vad',
                 threshold: 0.5,
@@ -603,7 +637,12 @@ fastify.register(async (app) => {
                 ],
               },
             }))
-            ws.send(JSON.stringify({ type: 'response.create' }))
+            ws.send(JSON.stringify({
+              type: 'response.create',
+              response: {
+                modalities: ['audio'],
+              },
+            }))
           }, 500)
         })
 
@@ -612,7 +651,7 @@ fastify.register(async (app) => {
             const data = JSON.parse(message.toString())
 
             // Forward Grok's audio back to Twilio
-            if (data.type === 'response.audio.delta' && data.delta) {
+            if ((data.type === 'response.output_audio.delta' || data.type === 'response.audio.delta') && data.delta) {
               twilioConn.send(JSON.stringify({
                 event: 'media',
                 streamSid: sid,

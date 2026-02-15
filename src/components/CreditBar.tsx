@@ -1,16 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 
 interface CreditBarProps {
   credits: number
-  hasUsedLoveCode: boolean
   onCreditsUpdated: () => void
 }
 
-export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }: CreditBarProps) {
-  const [showPromo, setShowPromo] = useState(false)
+export default function CreditBar({ credits, onCreditsUpdated }: CreditBarProps) {
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
   const [promoError, setPromoError] = useState(false)
@@ -61,57 +58,52 @@ export default function CreditBar({ credits, hasUsedLoveCode, onCreditsUpdated }
 
   return (
     <div className="surface-card">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[12px] uppercase tracking-[0.12em] text-muted">Credits</p>
-          <p className="mt-1 text-[15px] text-primary">
-            <span className="font-medium">{credits}</span> call{credits !== 1 ? 's' : ''} available
-          </p>
-        </div>
+      <p className="text-[12px] uppercase tracking-[0.12em] text-muted">Credits</p>
+      <p className="mt-1 text-[15px] text-primary">
+        Credits: <span className="font-medium">{credits}</span> call{credits !== 1 ? 's' : ''} available
+      </p>
 
-        <div className="flex items-center gap-2">
-          {!hasUsedLoveCode && (
-            <button onClick={() => setShowPromo(!showPromo)} className="btn-secondary">
-              Enter code
-            </button>
-          )}
-          <button onClick={buyPack} disabled={isBuying} className="btn-cupid">
-            {isBuying ? 'Processing…' : 'Buy 3-call pack ($10 AUD)'}
+      <div className="mt-5">
+        <label className="mb-2 block text-[12px] uppercase tracking-[0.12em] text-muted">Enter code</label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            className="input-cupid flex-1 uppercase tracking-[0.1em]"
+            placeholder="Promo code"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && redeemPromo()}
+          />
+          <button onClick={redeemPromo} disabled={!promoCode || isRedeeming} className="btn-cupid sm:min-w-[120px]">
+            {isRedeeming ? 'Applying…' : 'Apply code'}
           </button>
         </div>
       </div>
-      <p className="mt-2 text-[12px] text-muted">3-pack checkout is currently available for ANZ or US only.</p>
 
-      <AnimatePresence>
-        {showPromo && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-              <input
-                type="text"
-                className="input-cupid flex-1 uppercase tracking-[0.1em]"
-                placeholder="Promo code"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && redeemPromo()}
-              />
-              <button onClick={redeemPromo} disabled={!promoCode || isRedeeming} className="btn-cupid sm:min-w-[120px]">
-                {isRedeeming ? 'Applying…' : 'Apply code'}
-              </button>
-            </div>
+      {promoMessage && (
+        <p className={`mt-2 text-[13px] ${promoError ? 'text-[var(--age-red)]' : 'text-[var(--age-green)]'}`}>
+          {promoMessage}
+        </p>
+      )}
 
-            {promoMessage && (
-              <p className={`mt-2 text-[13px] ${promoError ? 'text-[var(--age-red)]' : 'text-[var(--age-green)]'}`}>
-                {promoMessage}
-              </p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <button onClick={buyPack} disabled={isBuying} className="btn-cupid mt-5 w-full">
+        {isBuying ? 'Processing…' : 'Buy 3-call pack ($10 AUD)'}
+      </button>
+      <p className="mt-2 text-[12px] leading-[1.7] text-muted">
+        Currently available for Australia, New Zealand, United States, and Canada.
+      </p>
+      <p className="mt-3 text-[12px] leading-[1.7] text-muted">
+        Request more countries.{' '}
+        <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
+          Request
+        </a>
+      </p>
+      <p className="mt-1 text-[12px] leading-[1.7] text-muted">
+        Report an issue with credits.{' '}
+        <a className="text-primary underline" href="mailto:kasey.bitpixi@gmail.com">
+          Report
+        </a>
+      </p>
     </div>
   )
 }
